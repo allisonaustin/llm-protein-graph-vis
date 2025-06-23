@@ -64,6 +64,4 @@ Note: You may need to install [pygraphvis](https://pygraphviz.github.io/document
    
 
 ### References 
-1. A. Vasan et al., "High Performance Binding Affinity Prediction with a Transformer-Based Surrogate Model," 2024 IEEE International Parallel and Distributed Processing Symposium Workshops (IPDPSW), San Francisco, CA, USA, 2024, pp. 571-580, doi: 10.1109/IPDPSW63119.2024.00114. keywords: {Proteins;Ion radiation effects;Accuracy;Computational modeling;Pipelines;Transformers;Supercomputers;drug discovery;virtual screening;docking surrogates;high performance computing;transformers},
-
-2. Libraries used: [D3](https://d3js.org), [Flask](https://flask.palletsprojects.com/en/stable/),  [3d-force-graph](https://github.com/vasturiano/3d-force-graph?tab=readme-ov-file)
+1. Libraries used: [D3](https://d3js.org), [Flask](https://flask.palletsprojects.com/en/stable/),  [3d-force-graph](https://github.com/vasturiano/3d-force-graph?tab=readme-ov-file)
