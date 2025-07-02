@@ -18,6 +18,8 @@
   <script src="//unpkg.com/d3-octree"></script>
   <script src="//unpkg.com/d3-force-3d"></script>
   <script src="//unpkg.com/3d-force-graph"></script>
+
+  <script src="//cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
   <script type="importmap">
     {
       "imports": {
@@ -36,6 +38,21 @@
   <p id="title" style="color:white; position: fixed; z-index: 1;  " >Protein-Protein Interactions using Large Language Models</p>
 </div>
 <div id="3d-graph" style="position: fixed;"></div>
+
+<div id="protein-frame-container"></div>
+
+<svg id="modal-connectors"
+     style="
+       position: fixed;
+       top: 0;
+       left: 0;
+       width: 100%;
+       height: 100%;
+       pointer-events: none;
+       z-index: 999;
+     ">
+</svg>
+
 <div id ="logo-images" style="visibility:visible;">
   <!-- <img src="./static/data/logos_all.png" style="position: fixed; z-index: 10; padding-left: 5px; padding-top: 25px; " alt="ANL" width="445" height="65"> -->
   <img src="./static/data/ALCF.png" style="position: fixed; z-index: 10; padding-left: 5px; padding-top: 25px; " alt="ANL" width="200" height="30"> 
@@ -43,10 +60,6 @@
   <img src="./static/data/HPE.png" style="position: fixed; z-index: 10; padding-left: 310px; " alt="HPE" width="150" height="65"> 
 
 </div>
-
-
-
-
 
 <script>
 
@@ -142,10 +155,12 @@
 
             }else{ // clear link directions
 
+              console.log('clearing...')
               highlightNodes.clear();
               highlightLinks.clear();
               hoverNode = null;
               updateHighlight();
+              closeProteinModal(node.id);
               return;
 
             }
@@ -153,6 +168,14 @@
             hoverNode = !node ? null : node.id || null;
 
             updateHighlight();
+
+            console.log("Node selected:", node.id)
+
+            // ---- Load protein structure ----
+            getPDBIdFromGene(node.id).then(pdbId => {
+              if (pdbId) createProteinModal(node.id, pdbId);
+              else alert(`No PDB ID found for ${node.id}`);
+            });
           })
           .onLinkClick(link => {
 
@@ -349,7 +372,177 @@
     }, [])
   }
 
+  // getting PDB ID from gene name using UniProt REST API
+  async function getPDBIdFromGene(geneName) {
+    const url = `https://rest.uniprot.org/uniprotkb/search?query=gene:${geneName}+AND+organism_id:9606&fields=accession,xref_pdb&format=json`;
+    const res = await fetch(url);
+    const data = await res.json();
 
+    const pdbIds = data?.results?.[0]?.uniProtKBCrossReferences
+      ?.filter(ref => ref.database === 'PDB')
+      .map(ref => ref.id);
+
+    return pdbIds?.[0] || null;
+  }
+
+  function createProteinModal(gene, pdbId) {
+    const container = document.getElementById("protein-frame-container");
+
+    // Create modal wrapper
+    const modal = document.createElement("div");
+    modal.className = "draggable resizable protein-modal";
+    modal.style.cssText = `
+      position: fixed;
+      top: 100px;
+      left: 100px;
+      width: 300px;
+      height: 280px;
+      background: white;
+      border: 2px solid #444;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      overflow: hidden;
+    `;
+    modal.id = `protein-modal-${gene}`;
+
+    const header = document.createElement("div");
+    header.className = "modal-header";
+    header.style.cssText = `
+      height: 20px;
+      background: #222;
+      color: white;
+      padding: 6px 6px; 
+      cursor: move;
+      font-family: 'Lucida Grande', sans-serif;
+    `;
+    header.textContent = `3D Structure: ${gene} (${pdbId})`;
+
+    // Close button
+    const closeBtn = document.createElement("button");
+    closeBtn.textContent = "×";
+    closeBtn.style.cssText = `
+      position: absolute;
+      top: 5px;
+      right: 10px;
+      background: none;
+      border: none;
+      font-size: 20px;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      z-index: 1;
+    `;
+    closeBtn.onclick = () => modal.remove();
+
+    // frame
+    const frame = document.createElement("iframe");
+    frame.src = `https://molstar.org/viewer/?pdb=${pdbId}&hide-controls=1&collapse-left-panel=1`;
+    frame.style.cssText = `
+      width: 100%;
+      height: calc(100% - 30px);
+      border: none;
+    `;
+    frame.id = `protein-frame-${gene}`;
+
+    // building DOM
+    modal.appendChild(header);
+    modal.appendChild(closeBtn);
+    modal.appendChild(frame);
+    container.appendChild(modal);
+
+    requestAnimationFrame(() => {
+      updateConnectorLine(Graph.graphData().nodes.find(n => n.id === gene), modal);
+    });
+
+    // adding interactions
+    interact(modal)
+      .draggable({
+        allowFrom: '.modal-header',
+        listeners: {
+          move(event) {
+            const target = event.target;
+            const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+            const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+
+            target.style.transform = `translate(${x}px, ${y}px)`;
+            target.setAttribute('data-x', x);
+            target.setAttribute('data-y', y);
+            
+            // updating line
+            const gene = target.querySelector('.modal-header')?.textContent?.split(':')[1]?.trim()?.split(' ')[0];
+            const node = Graph.graphData().nodes.find(n => n.id === gene);
+            if (node) updateConnectorLine(node, target);
+          }
+        }
+      })
+
+
+    // adding a line element to the svg
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    line.setAttribute("id", `line-${gene}`);
+    line.setAttribute("stroke", "red");
+    line.setAttribute("stroke-width", "1.2");
+    line.setAttribute("stroke-dasharray", "5,5");
+    document.getElementById("modal-connectors").appendChild(line);
+
+    // updating line position on drag or animation
+    function updateLine() {
+      const nodePos = Graph.graph2ScreenCoords(
+        Graph.graphData().nodes.find(n => n.id === gene).x,
+        Graph.graphData().nodes.find(n => n.id === gene).y,
+        Graph.graphData().nodes.find(n => n.id === gene).z
+      );
+
+      const modalRect = modal.getBoundingClientRect();
+      const modalX = modalRect.left + modalRect.width / 2;
+      const modalY = modalRect.top + modalRect.height / 2;
+
+      line.setAttribute("x1", nodePos.x);
+      line.setAttribute("y1", nodePos.y);
+      line.setAttribute("x2", modalX);
+      line.setAttribute("y2", modalY);
+    }
+
+    // Call once and on animation frames
+    updateLine();
+    const lineInterval = setInterval(updateLine, 30); // keep line updated while dragging
+
+    // Remove line on modal close
+    closeBtn.onclick = () => {
+      modal.remove();
+      line.remove();
+      clearInterval(lineInterval);
+    };
+  }
+
+  function closeProteinModal(gene) {
+    const modal = document.getElementById(`protein-modal-${gene}`);
+    const line = document.getElementById(`line-${gene}`);
+    if (modal) modal.remove();
+    if (line) line.remove();
+  }
+
+  function updateConnectorLine(geneId, pdbId) {
+    const node = Graph.graphData().nodes.find(n => n.id === geneId);
+    if (!node) return;
+
+    const { x, y } = Graph.graph2ScreenCoords(node.x, node.y, node.z);  // <-- this is all you need
+
+    const modal = document.getElementById(`protein-modal-${pdbId}`);
+    if (!modal) return;
+
+    const modalRect = modal.getBoundingClientRect();
+    const modalX = modalRect.left + modalRect.width / 2;
+    const modalY = modalRect.top + modalRect.height / 2;
+
+    const line = document.getElementById(`connector-line-${pdbId}`);
+    if (line) {
+      line.setAttribute('x1', x);
+      line.setAttribute('y1', y);
+      line.setAttribute('x2', modalX);
+      line.setAttribute('y2', modalY);
+    }
+  }
 
   //Define GUI and functions
   const Settings = function() {
@@ -473,8 +666,6 @@
     document.getElementById("logo-images").style.paddingLeft = (window.innerWidth-460).toString()+"px";
     document.getElementById("title").style.width = window.innerWidth.toString()+"px";
   });
-
-  
 
 
 </script>

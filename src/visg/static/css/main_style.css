@@ -43,3 +43,12 @@ div.dg{
 div.dg.ac{
     z-index: 2 !important;
 }
+
+.header {
+  height: 20px;
+  background: #222;
+  color: white;
+  padding: 6px 6px;
+  cursor: move;
+  font-family: 'Lucida Grande', sans-serif;
+}
