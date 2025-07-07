@@ -71,8 +71,9 @@
   };
   const color8 = "#F3A9"; // for redefining color shades
   let counter = 0;
-  const highlightNodes = new Set();
+  const highlightNodes = new Set(); 
   const highlightLinks = new Set();
+  let hoverNodes = new Set(); // selected (red) nodes
   let hoverNode = null;
   let showLinkParticle = false;
   let showNeighbors = false;
@@ -115,7 +116,8 @@
           .nodeColor(node => {
 
             if(highlightNodes.has(node.id)){
-              if(node.id === hoverNode) {
+              if (hoverNodes.has(node.id)) {
+              // if(node.id === hoverNode) {
                 return "red";
               }else{
                 return '#FFA000';
@@ -156,8 +158,13 @@
             }else{ // clear link directions
 
               console.log('clearing...')
-              highlightNodes.clear();
-              highlightLinks.clear();
+              // highlightNodes.clear();
+              // highlightLinks.clear();
+              
+              highlightNodes.delete(node.id);
+              node.neighbors.forEach(neighbor => highlightNodes.delete(neighbor));
+              node.links.forEach(link => highlightLinks.delete(link));
+
               hoverNode = null;
               updateHighlight();
               closeProteinModal(node.id);
@@ -166,6 +173,9 @@
             }
 
             hoverNode = !node ? null : node.id || null;
+            if (node) {
+              hoverNodes.add(node.id);
+            }
 
             updateHighlight();
 
@@ -557,6 +567,7 @@
   const toggleLinkAnimation = () => {
     if(!showLinkParticle){
       highlightNodes.clear();
+      hoverNodes.clear();
       hoverNode = null;
       highlightLinks.clear();
       updateHighlight();
