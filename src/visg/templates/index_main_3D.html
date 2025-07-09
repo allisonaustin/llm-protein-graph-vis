@@ -35,7 +35,7 @@
 </head>
 <body>
 <div>
-  <p id="stats" style="color:white; position: fixed; z-index: 1; padding-left: 10px;" ><i></i></p>
+  <p id="stats" style="color:white; position: fixed; z-index: 1; padding-left: 10px; padding-top: 60px" ><i></i></p>
 </div>
 <div id="main-title-container">
   <p id="title" style="color:white; position: fixed; z-index: 1;  " >Protein-Protein Interactions using Large Language Models</p>
@@ -594,9 +594,9 @@
     inputElem.value = '';
 
     const chatElem = document.createElement('p');
-    chatElem.innerHTML = `<strong>Model:</strong> <span id="chat-reply"></span>`;
+    chatElem.innerHTML = `<strong>Model:</strong> <span id="chat-reply-${Date.now()}"></span>`;
     history.appendChild(chatElem);
-    const replyContainer = document.getElementById('chat-reply');
+    const replyContainer = document.getElementById(`chat-reply-${Date.now()}`);
 
     const res = await fetch('http://localhost:11434/api/chat', {
       method: 'POST',
@@ -604,7 +604,10 @@
       body: JSON.stringify({
         model: 'llama3.1',
         stream: true,  
-        messages: [{ role: 'user', content: userInput }]
+        messages: [
+          { role: 'system', content: 'Please keep your answers concise, around 2-3 sentences.' },
+          { role: 'user', content: userInput }
+        ]
       })
     });
 
