@@ -19,6 +19,9 @@
   <script src="//unpkg.com/d3-force-3d"></script>
   <script src="//unpkg.com/3d-force-graph"></script>
 
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
   <script src="//cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
   <script type="importmap">
     {
@@ -53,11 +56,27 @@
      ">
 </svg>
 
+<div id="chat-container" class="card bg-dark text-white position-fixed bottom-0 start-0 m-4 shadow"
+     style="width: 20rem; height: auto; z-index: 1000;">
+  <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+    <span>Llama 3.1</span>
+    <button class="btn btn-sm btn-outline-light" onclick="toggleChatBody()">+</button>
+  </div>
+
+  <div id="chat-body" style="display: none;">
+    <div id="chat-history" class="card-body overflow-auto" style="height: 200px; font-size: 0.9rem;"></div>
+    <div class="card-footer d-flex p-2 bg-dark">
+      <input type="text" id="chat-input" class="form-control me-2 bg-secondary text-white border-0" placeholder="Type a question...">
+      <button class="btn btn-outline-light" onclick="sendChat()">Send</button>
+    </div>
+  </div>
+</div>
+
 <div id ="logo-images" style="visibility:visible;">
   <!-- <img src="./static/data/logos_all.png" style="position: fixed; z-index: 10; padding-left: 5px; padding-top: 25px; " alt="ANL" width="445" height="65"> -->
-  <img src="./static/data/ALCF.png" style="position: fixed; z-index: 10; padding-left: 5px; padding-top: 25px; " alt="ANL" width="200" height="30"> 
-  <img src="./static/data/intel.png" style="position: fixed; z-index: 10; padding-left: 225px; padding-top: 25px; " alt="Intel" width="70" height="25"> 
-  <img src="./static/data/HPE.png" style="position: fixed; z-index: 10; padding-left: 310px; " alt="HPE" width="150" height="65"> 
+  <img src="./static/data/ALCF.png" style="position: fixed; z-index: 10; right: 360px; padding-top: 25px; " alt="ANL" width="200" height="auto"> 
+  <img src="./static/data/intel.png" style="position: fixed; z-index: 10; right: 240px; padding-top: 25px; " alt="Intel" width="70" height="auto"> 
+  <img src="./static/data/HPE.png" style="position: fixed; z-index: 10; right: 45px; " alt="HPE" width="150" height="65"> 
 
 </div>
 
@@ -87,6 +106,9 @@
   const timerV = 12000;
   const timerStep = 10800;
   var currTimerStep = timerStep;
+  var currLayout = 'Force-Directed';
+  var organism = '9606'; // human
+  var isMinimized = true;
 
   const Graph = ForceGraph3D()(elem)
           .backgroundColor(bckColor) //#101020
@@ -160,7 +182,7 @@
               console.log('clearing...')
               // highlightNodes.clear();
               // highlightLinks.clear();
-              
+
               highlightNodes.delete(node.id);
               node.neighbors.forEach(neighbor => highlightNodes.delete(neighbor));
               node.links.forEach(link => highlightLinks.delete(link));
@@ -214,11 +236,13 @@
   Graph.lights()[1].intensity = 15.0;
 
   // force directed d3 simulation set up
-  Graph.d3Force('collide', d3.forceCollide(collisonStrengthVal))
-          .d3AlphaDecay(0.02)
-          .d3VelocityDecay(0.3)
-          .d3Force("charge", d3.forceManyBody().strength(-200))
-          .d3Force('link');
+  if (currLayout == 'Force-Directed') {
+    Graph.d3Force('collide', d3.forceCollide(collisonStrengthVal))
+        .d3AlphaDecay(0.02)
+        .d3VelocityDecay(0.3)
+        .d3Force("charge", d3.forceManyBody().strength(-200))
+        .d3Force('link');
+  } 
 
   // trigger update of highlighted objects in scene
   function updateHighlight() {
@@ -348,6 +372,9 @@
     setStats(nlen, llen);
 
     Graph.graphData(result);
+    if (currLayout === 'Spherical') {
+      applySphericalLayout(result.nodes);
+    }
     updateHighlight();
 
     // adding logos and title
@@ -384,7 +411,7 @@
 
   // getting PDB ID from gene name using UniProt REST API
   async function getPDBIdFromGene(geneName) {
-    const url = `https://rest.uniprot.org/uniprotkb/search?query=gene:${geneName}+AND+organism_id:9606&fields=accession,xref_pdb&format=json`;
+    const url = `https://rest.uniprot.org/uniprotkb/search?query=gene:${geneName}+AND+organism_id:${organism}&fields=accession,xref_pdb&format=json`;
     const res = await fetch(url);
     const data = await res.json();
 
@@ -418,7 +445,7 @@
     const header = document.createElement("div");
     header.className = "modal-header";
     header.style.cssText = `
-      height: 20px;
+      height: 30px;
       background: #222;
       color: white;
       padding: 6px 6px; 
@@ -554,12 +581,77 @@
     }
   }
 
+  // chatting with ollama locally
+  async function sendChat() {
+    const inputElem = document.getElementById('chat-input');
+    const userInput = inputElem.value.trim();
+    console.log('prompt:',inputElem.value);
+    if (!userInput) return;
+
+    const history = document.getElementById('chat-history');
+    history.innerHTML += `<p><strong>You:</strong> ${userInput}</p>`;
+    // clearing input field
+    inputElem.value = '';
+
+    const chatElem = document.createElement('p');
+    chatElem.innerHTML = `<strong>Model:</strong> <span id="chat-reply"></span>`;
+    history.appendChild(chatElem);
+    const replyContainer = document.getElementById('chat-reply');
+
+    const res = await fetch('http://localhost:11434/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama3.1',
+        stream: true,  
+        messages: [{ role: 'user', content: userInput }]
+      })
+    });
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let markdownBuffer = '';
+    replyContainer.textContent = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const json = JSON.parse(line);
+          const chunk = json.message?.content;
+          if (chunk) {
+            markdownBuffer += chunk;
+            replyContainer.textContent += chunk;
+            history.scrollTop = history.scrollHeight;
+          }
+        } catch (err) {
+          console.warn("Skipping invalid line:", line);
+        }
+      }
+    }
+
+    // When streaming finishes, convert full Markdown buffer to HTML
+    replyContainer.innerHTML = marked.parse(markdownBuffer);
+  }
+
   //Define GUI and functions
   const Settings = function() {
+    this.ShowLinkDirections = false;
+    this.ShowNodeNeighbors = false;
     this.redDistance = 10000;
     this.MinLinks = minLimit;
     this.MaxLinks = maxLimit;
     this.NodeDistance = collisonStrengthVal;
+    this.Layout = currLayout;
+    this.Organism = organism; // Human
   };
 
 
@@ -578,6 +670,25 @@
     }
     showLinkParticle = !showLinkParticle;
 
+  }
+
+  function toggleChatBody() {
+    const body = document.getElementById('chat-body');
+    const btn = event.target;
+
+    if (isMinimized) {
+      body.style.display = 'block';
+      btn.textContent = '—';
+    } else {
+      body.style.display = 'none';
+      btn.textContent = '+'; 
+    }
+
+    isMinimized = !isMinimized;
+  }
+
+  const updateOrganismId = (value) => {
+    organism = value;
   }
 
   //Zoom to Fit
@@ -615,6 +726,39 @@
     Graph.numDimensions(3);
   }
 
+ function applyForceDirectedLayout() {
+    Graph.d3Force('collide', d3.forceCollide(collisonStrengthVal))
+      .d3Force('center', d3.forceCenter(0, 0, 0))
+      .d3AlphaDecay(0.02)
+      .d3VelocityDecay(0.3)
+      .d3Force("charge", d3.forceManyBody().strength(-200))
+      .d3Force('link', d3.forceLink().id(d => d.id).distance(50).strength(0.5))
+      .d3Force('spherical', null); 
+
+    Graph.numDimensions(3);
+    Graph.d3ReheatSimulation(); // Restart the layout animation
+  }
+
+  function applySphericalLayout(nodes) {
+    Graph.d3Force('charge', null)
+        .d3Force('center', null)
+        .d3Force('collision', null)
+        .d3Force('link', null)
+        // .d3Force('link', d3.forceLink().id(d => d.id))
+        .d3Force('spherical', forceRadius(nodes));  
+  }
+
+  function forceRadius(nodes, R=300) {
+    const count = nodes.length;
+    nodes.forEach((node, i) => {
+      const phi = Math.acos(-1 + (2 * i) / count);      
+      const theta = Math.sqrt(count * Math.PI) * phi;  
+
+      node.x = R * Math.cos(theta) * Math.sin(phi);
+      node.y = R * Math.sin(theta) * Math.sin(phi);
+      node.z = R * Math.cos(phi);
+    });
+  }
 
   // showLinkWidth
   const toggleLinkWidth = () => {
@@ -654,14 +798,26 @@
 
   var folder3 = gui.addFolder('GUI Buttons');
   folder3.add({ 'Zoom to Fit': zoomToFit }, 'Zoom to Fit');
+  folder3.add(settings, 'Layout', ['Force-Directed', 'Spherical']).onChange(val => {
+    if (val === 'Force-Directed') {
+      applyForceDirectedLayout();
+      currLayout = 'Force-Directed';
+    } else if (val === 'Spherical') {
+      applySphericalLayout(Graph.graphData().nodes);
+      Graph.graphData(Graph.graphData());
+      currLayout = 'Spherical';
+    }
+  });
+  // var linkDir = folder3.add(settings, 'ShowLinkDirections').name('LinkDirections');
+  // linkDir.onChange(toggleLinkAnimation);
+  // var neighbors = folder3.add(settings, 'ShowNodeNeighbors').name('NodeNeighbors');
+  // neighbors.onChange(showNodeNeighbors);
   folder3.add({ 'Show Link Directions': toggleLinkAnimation }, 'Show Link Directions');
   // folder3.add({ 'Show Link Width': toggleLinkWidth }, 'Show Link Width');
   folder3.add({ 'Show Node Neighbors': showNodeNeighbors }, 'Show Node Neighbors');
   folder3.add({ 'Pause/Resume Data Reload': pauseResumeDataLoad }, 'Pause/Resume Data Reload');
   folder3.add({ 'Load File': startDataLoad }, 'Load File');
   folder3.open();
-
-
 
   // main graph load and backend data update listener
   startDataLoad();

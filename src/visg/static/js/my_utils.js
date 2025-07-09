@@ -1,5 +1,5 @@
 
-const collisonStrengthVal = 20;
+const collisonStrengthVal = 10;
 const bckColor = '#000000';//"#242124"//raisin black //"#1B1212" //licorice//'#28282B';//matte black//'#00000f';//black
 const minLimit = 0;
 const maxLimit = 3000000;
