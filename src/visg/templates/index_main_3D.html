@@ -59,21 +59,21 @@
 <div id="protein-info-container" class="card bg-dark text-white position-fixed bottom-0 start-0 m-4 shadow" style="width: 20rem; height: auto; z-index: 1000;">
   <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
     <span>Protein Info</span>
-    <button class="btn btn-sm btn-outline-light" onclick="toggleInfoBody()">+</button>
+    <button class="btn btn-sm btn-outline-light" onclick="toggleInfoBody()">—</button>
   </div>
 
-  <div id="info-body" style="display: none;">
+  <div id="info-body">
       <!-- Protein Search -->
       <div class="card bg-dark text-white shadow">
-      <div class="card-body p-2">
-        <input type="text" id="protein-search" class="form-control bg-secondary text-white border-0 mb-2" placeholder="Enter protein name..." />
-        <button class="btn btn-outline-light w-100" onclick="searchAndFocusNode()">Search</button>
+      <div class="card-body p-2 d-flex">
+        <input type="text" id="protein-search" class="form-control me-2 bg-secondary text-white border-0" placeholder="Enter protein name..." />
+        <button class="btn btn-outline-light" onclick="searchAndFocusNode()">Search</button>
       </div>
     </div>
 
     <!-- Chat -->
     <div class="card-header bg-secondary text-white">
-      <span>LLama 3.1</span>
+      <span>Llama 3.1</span>
     </div>
     <div id="chat-history" class="card-body overflow-auto" style="height: 200px; font-size: 0.9rem;"></div>
     <div class="card-footer d-flex p-2 bg-dark">
@@ -84,9 +84,9 @@
 </div>
 
 <div id ="logo-images" style="visibility:visible;">
-  <div id="legend-confidence" class='edge-legend' style="position: fixed; z-index: 10; right: 700px; bottom: 35px; text-align: center;">
+  <div id="legend-confidence" class='edge-legend' style="position: fixed; z-index: 10; right: 650px; bottom: 35px; text-align: center;">
     <strong>STRINGDB Confidence Score</strong>
-    <div style="width: 200px; height: 15px; background: linear-gradient(to right, red, green); border: 1px solid #ccc;"></div>
+    <div style="width: 250px; height: 15px; background: linear-gradient(to right, red, green); border: 1px solid #ccc;"></div>
     <div style="display: flex; justify-content: space-between; font-size: 12px; color: white;">
       <span>Low (0.0)</span>
       <span>High (1.0)</span>
@@ -95,22 +95,24 @@
   <div id="legend-db" class='edge-legend' style="position: fixed; display:none; z-index: 10; right: 700px; bottom: 35px;">
     <strong>Local DB</strong>
     <div style="margin-top: 5px;">
-      <div style="display: flex; align-items: center; margin-bottom: 5px;">
-          <div style="width: 12px; height: 12px; background-color: red; border: 1px solid white; margin-right: 8px;"></div>
-          Not in big_table or STRING (novel)
-        </div>
-        <div style="display: flex; align-items: center; margin-bottom: 5px;">
-          <div style="width: 12px; height: 12px; background-color: orange; border: 1px solid white; margin-right: 8px;"></div>
-          In big_table, not in STRING
-        </div>
-        <div style="display: flex; align-items: center; margin-bottom: 5px;">
-          <div style="width: 12px; height: 12px; background-color: blue; border: 1px solid white; margin-right: 8px;"></div>
-          In STRING, not in big_table
-        </div>
-        <div style="display: flex; align-items: center;">
-          <div style="width: 12px; height: 12px; background-color: green; border: 1px solid white; margin-right: 8px;"></div>
-          High score in both sources
-        </div>
+      <div style="cursor: pointer;" class="legend-item" data-color="red">
+        <div style="width: 12px; height: 12px; background-color: red; border: 1px solid white; margin-right: 8px;"></div>
+        Not in big_table or STRING (novel)
+      </div>
+      <div style="cursor: pointer;" class="legend-item" data-color="orange">
+        <div style="width: 12px; height: 12px; background-color: orange; border: 1px solid white; margin-right: 8px;"></div>
+        In big_table, not in STRING
+      </div>
+      <div style="cursor: pointer;" class="legend-item" data-color="blue">
+        <div style="width: 12px; height: 12px; background-color: blue; border: 1px solid white; margin-right: 8px;"></div>
+        In STRING, not in big_table</div>
+      <div style="cursor: pointer;" class="legend-item" data-color="green">
+        <div style="width: 12px; height: 12px; background-color: green; border: 1px solid white; margin-right: 8px;"></div>
+        High score in both sources</div>
+      </div>
+      <div style="cursor: pointer;" class="legend-item" data-color="gray">
+        <div style="width: 12px; height: 12px; background-color: gray; border: 1px solid white; margin-right: 8px;"></div>
+        None of the above</div>
       </div>
     </div>
   </div>
@@ -150,7 +152,8 @@
   var currLayout = 'Force-Directed';
   var edgeColor = 'Confidence';
   var organism = '9606'; // human
-  var isMinimized = true;
+  var isMinimized = false;
+  var activeLink = null;
 
   const confidenceColorScale = d3.scaleLinear()
     .domain([0, 1.0])  
@@ -291,6 +294,18 @@
         .d3Force('link');
   } 
 
+  document.querySelectorAll('.legend-item').forEach(item => {
+    item.addEventListener('mouseenter', () => {
+      activeLink = item.getAttribute('data-color');
+      Graph.linkVisibility(filterLink);
+    });
+
+    item.addEventListener('mouseleave', () => {
+      activeLink = null;
+      Graph.linkVisibility(filterLink);
+    });
+  });
+
   // trigger update of highlighted objects in scene
   function updateHighlight() {
 
@@ -353,6 +368,12 @@
   function resetGraph(){
     Graph.graphData(initData)
 
+  }
+
+  function filterLink(link) {
+    if (!activeLink) return true;
+    const linkColor = link.color || 'gray';
+    return linkColor === activeLink;
   }
 
 
@@ -757,6 +778,36 @@
         node, // Look-at target
         1000  // ms transition duration
       );
+
+      // no state change
+      if (!node && !highlightNodes.size) return;
+
+      if (node && !highlightNodes.has(node.id)) { // show link directions on hover
+
+        highlightNodes.add(node.id);
+        node.neighbors.forEach(neighbor => highlightNodes.add(neighbor));
+        node.links.forEach(link => highlightLinks.add(link));
+
+      }else{ // clear link directions
+        highlightNodes.delete(node.id);
+        node.neighbors.forEach(neighbor => highlightNodes.delete(neighbor));
+        node.links.forEach(link => highlightLinks.delete(link));
+        hoverNode = null;
+        updateHighlight();
+        closeProteinModal(node.id);
+        return;
+
+      }
+      hoverNode = !node ? null : node.id || null;
+      if (node) {
+        hoverNodes.add(node.id);
+      }
+      updateHighlight();
+      // ---- Load protein structure ----
+      getPDBIdFromGene(node.id).then(pdbId => {
+        if (pdbId) createProteinModal(node.id, pdbId);
+        else alert(`No PDB ID found for ${node.id}`);
+      });
     } else {
       alert("Protein not found in the graph.");
     }
@@ -801,7 +852,40 @@
     Graph.numDimensions(3);
   }
 
- function applyForceDirectedLayout() {
+  function forceConcentricSphere(nodes, baseRadius = 100, shellSpacing = 100) {
+    // sorting by degree and assign shells
+    const degrees = nodes.map(n => ({
+      id: n.id,
+      degree: n.neighbors ? n.neighbors.length : 0
+    }));
+
+    const maxDegree = Math.max(...degrees.map(d => d.degree));
+    const minDegree = Math.min(...degrees.map(d => d.degree));
+
+    // Map node id to layer index (lower degree = outer shell)
+    const layerMap = {};
+    degrees.forEach(({ id, degree }) => {
+      const normalized = (degree - minDegree) / (maxDegree - minDegree + 1e-6); // normalize [0,1]
+      const layer = Math.round(normalized * 2); // e.g., 3 shells: 0 (inner) to 2 (outer)
+      layerMap[id] = layer;
+    });
+
+    return () => {
+      nodes.forEach(n => {
+        const layer = layerMap[n.id] || 0;
+        const radius = baseRadius + layer * shellSpacing;
+
+        const r = Math.sqrt(n.x * n.x + n.y * n.y + n.z * n.z) || 1e-6;
+        const scale = radius / r;
+
+        n.x *= scale;
+        n.y *= scale;
+        n.z *= scale;
+      });
+    };
+  }
+
+  function applyForceDirectedLayout() {
     Graph.d3Force('collide', d3.forceCollide(collisonStrengthVal))
       .d3Force('center', d3.forceCenter(0, 0, 0))
       .d3AlphaDecay(0.02)
@@ -815,24 +899,7 @@
   }
 
   function applySphericalLayout(nodes) {
-    Graph.d3Force('charge', null)
-        .d3Force('center', null)
-        .d3Force('collision', null)
-        .d3Force('link', null)
-        // .d3Force('link', d3.forceLink().id(d => d.id))
-        .d3Force('spherical', forceRadius(nodes));  
-  }
-
-  function forceRadius(nodes, R=300) {
-    const count = nodes.length;
-    nodes.forEach((node, i) => {
-      const phi = Math.acos(-1 + (2 * i) / count);      
-      const theta = Math.sqrt(count * Math.PI) * phi;  
-
-      node.x = R * Math.cos(theta) * Math.sin(phi);
-      node.y = R * Math.sin(theta) * Math.sin(phi);
-      node.z = R * Math.cos(phi);
-    });
+    Graph.d3Force('spherical', forceConcentricSphere(nodes))  // custom radial layout
   }
 
   // showLinkWidth

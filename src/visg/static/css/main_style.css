@@ -57,3 +57,9 @@ div.dg.ac{
   cursor: move;
   font-family: 'Lucida Grande', sans-serif;
 }
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+}
