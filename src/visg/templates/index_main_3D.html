@@ -56,14 +56,25 @@
      ">
 </svg>
 
-<div id="chat-container" class="card bg-dark text-white position-fixed bottom-0 start-0 m-4 shadow"
-     style="width: 20rem; height: auto; z-index: 1000;">
+<div id="protein-info-container" class="card bg-dark text-white position-fixed bottom-0 start-0 m-4 shadow" style="width: 20rem; height: auto; z-index: 1000;">
   <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
-    <span>Llama 3.1</span>
-    <button class="btn btn-sm btn-outline-light" onclick="toggleChatBody()">+</button>
+    <span>Protein Info</span>
+    <button class="btn btn-sm btn-outline-light" onclick="toggleInfoBody()">+</button>
   </div>
 
-  <div id="chat-body" style="display: none;">
+  <div id="info-body" style="display: none;">
+      <!-- Protein Search -->
+      <div class="card bg-dark text-white shadow">
+      <div class="card-body p-2">
+        <input type="text" id="protein-search" class="form-control bg-secondary text-white border-0 mb-2" placeholder="Enter protein name..." />
+        <button class="btn btn-outline-light w-100" onclick="searchAndFocusNode()">Search</button>
+      </div>
+    </div>
+
+    <!-- Chat -->
+    <div class="card-header bg-secondary text-white">
+      <span>LLama 3.1</span>
+    </div>
     <div id="chat-history" class="card-body overflow-auto" style="height: 200px; font-size: 0.9rem;"></div>
     <div class="card-footer d-flex p-2 bg-dark">
       <input type="text" id="chat-input" class="form-control me-2 bg-secondary text-white border-0" placeholder="Type a question...">
@@ -712,8 +723,8 @@
 
   }
 
-  function toggleChatBody() {
-    const body = document.getElementById('chat-body');
+  function toggleInfoBody() {
+    const body = document.getElementById('info-body');
     const btn = event.target;
 
     if (isMinimized) {
@@ -725,6 +736,30 @@
     }
 
     isMinimized = !isMinimized;
+  }
+
+  function searchAndFocusNode() {
+    const query = document.getElementById("protein-search").value.trim();
+    if (!query) return;
+
+    const node = Graph.graphData().nodes.find(n => n.id.toLowerCase() === query.toLowerCase());
+
+    if (node) {
+      const distance = 100; // how far the camera should be from the node
+      const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
+
+      Graph.cameraPosition(
+        { 
+          x: node.x * distRatio, 
+          y: node.y * distRatio, 
+          z: node.z * distRatio 
+        },  // New camera position
+        node, // Look-at target
+        1000  // ms transition duration
+      );
+    } else {
+      alert("Protein not found in the graph.");
+    }
   }
 
   const updateOrganismId = (value) => {
