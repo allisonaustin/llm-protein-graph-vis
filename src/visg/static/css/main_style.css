@@ -29,6 +29,11 @@ body{
     z-index: 1;
 }
 
+.edge-legend {
+    font-family: 'Lucida Grande', sans-serif;
+    color:white;
+}
+
 img {
     opacity: 1;
   }

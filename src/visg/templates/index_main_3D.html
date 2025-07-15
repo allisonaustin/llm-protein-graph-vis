@@ -73,6 +73,36 @@
 </div>
 
 <div id ="logo-images" style="visibility:visible;">
+  <div id="legend-confidence" class='edge-legend' style="position: fixed; z-index: 10; right: 700px; bottom: 35px; text-align: center;">
+    <strong>STRINGDB Confidence Score</strong>
+    <div style="width: 200px; height: 15px; background: linear-gradient(to right, red, green); border: 1px solid #ccc;"></div>
+    <div style="display: flex; justify-content: space-between; font-size: 12px; color: white;">
+      <span>Low (0.0)</span>
+      <span>High (1.0)</span>
+    </div>
+  </div>
+  <div id="legend-db" class='edge-legend' style="position: fixed; display:none; z-index: 10; right: 700px; bottom: 35px;">
+    <strong>Local DB</strong>
+    <div style="margin-top: 5px;">
+      <div style="display: flex; align-items: center; margin-bottom: 5px;">
+          <div style="width: 12px; height: 12px; background-color: red; border: 1px solid white; margin-right: 8px;"></div>
+          Not in big_table or STRING (novel)
+        </div>
+        <div style="display: flex; align-items: center; margin-bottom: 5px;">
+          <div style="width: 12px; height: 12px; background-color: orange; border: 1px solid white; margin-right: 8px;"></div>
+          In big_table, not in STRING
+        </div>
+        <div style="display: flex; align-items: center; margin-bottom: 5px;">
+          <div style="width: 12px; height: 12px; background-color: blue; border: 1px solid white; margin-right: 8px;"></div>
+          In STRING, not in big_table
+        </div>
+        <div style="display: flex; align-items: center;">
+          <div style="width: 12px; height: 12px; background-color: green; border: 1px solid white; margin-right: 8px;"></div>
+          High score in both sources
+        </div>
+      </div>
+    </div>
+  </div>
   <!-- <img src="./static/data/logos_all.png" style="position: fixed; z-index: 10; padding-left: 5px; padding-top: 25px; " alt="ANL" width="445" height="65"> -->
   <img src="./static/data/ALCF.png" style="position: fixed; z-index: 10; right: 360px; padding-top: 25px; " alt="ANL" width="200" height="auto"> 
   <img src="./static/data/intel.png" style="position: fixed; z-index: 10; right: 240px; padding-top: 25px; " alt="Intel" width="70" height="auto"> 
@@ -107,8 +137,13 @@
   const timerStep = 10800;
   var currTimerStep = timerStep;
   var currLayout = 'Force-Directed';
+  var edgeColor = 'Confidence';
   var organism = '9606'; // human
   var isMinimized = true;
+
+  const confidenceColorScale = d3.scaleLinear()
+    .domain([0, 1.0])  
+    .range(["red", "green"]);
 
   const Graph = ForceGraph3D()(elem)
           .backgroundColor(bckColor) //#101020
@@ -151,7 +186,8 @@
           })
           .nodeVal(node => (node.neighbors.length > 20 && node.neighbors.length < 30) ? 2 : (node.neighbors.length >= 30) ? 3 : 1)
           .nodeResolution(20)
-          .linkColor(link => link.color ? link.color : 'gray' )
+          // .linkColor(link => link.color ? link.color : 'gray' )
+          .linkColor(link => link.score ? confidenceColorScale(link.score) : 'gray')
           .linkOpacity(1)
           .linkDirectionalParticles(link => {
             if(showLinkParticle)
@@ -654,6 +690,7 @@
     this.MaxLinks = maxLimit;
     this.NodeDistance = collisonStrengthVal;
     this.Layout = currLayout;
+    this.EdgeColor = edgeColor;
     this.Organism = organism; // Human
   };
 
@@ -810,6 +847,23 @@
       Graph.graphData(Graph.graphData());
       currLayout = 'Spherical';
     }
+  });
+  folder3.add(settings, 'EdgeColor', ['Confidence', 'DB']).onChange(val => {
+    edgeColor = val;
+    document.querySelectorAll('.edge-legend').forEach(el => el.style.display = 'none');
+    // Show the selected legend
+    if (val === 'Confidence') {
+      document.getElementById('legend-confidence').style.display = 'block';
+    } else if (val === 'DB') {
+      document.getElementById('legend-db').style.display = 'block';
+    }
+    Graph.linkColor(link => {
+      if (val === 'Confidence') {
+        return link.score ? confidenceColorScale(link.score) : 'gray';
+      } else {
+        return link.color ? link.color : 'gray';
+      }
+    });
   });
   // var linkDir = folder3.add(settings, 'ShowLinkDirections').name('LinkDirections');
   // linkDir.onChange(toggleLinkAnimation);
