@@ -866,13 +866,14 @@
     const layerMap = {};
     degrees.forEach(({ id, degree }) => {
       const normalized = (degree - minDegree) / (maxDegree - minDegree + 1e-6); // normalize [0,1]
-      const layer = Math.round(normalized * 2); // e.g., 3 shells: 0 (inner) to 2 (outer)
+      const layer = Math.round(normalized * 3); // e.g., 4 shells: 0 (inner) to 3 (outer)
       layerMap[id] = layer;
     });
 
     return () => {
       nodes.forEach(n => {
         const layer = layerMap[n.id] || 0;
+        n.shellLayer = layer;
         const radius = baseRadius + layer * shellSpacing;
 
         const r = Math.sqrt(n.x * n.x + n.y * n.y + n.z * n.z) || 1e-6;
@@ -900,6 +901,10 @@
 
   function applySphericalLayout(nodes) {
     Graph.d3Force('spherical', forceConcentricSphere(nodes))  // custom radial layout
+          .nodeVal(node => {
+            const layer = node.shellLayer ?? 0;
+            return 0.3 + layer; // smaller node size for inner layer
+          })
   }
 
   // showLinkWidth
