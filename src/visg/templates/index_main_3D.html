@@ -85,7 +85,7 @@
 
 <div id ="logo-images" style="visibility:visible;">
   <div id="legend-confidence" class='edge-legend' style="position: fixed; z-index: 10; right: 650px; bottom: 35px; text-align: center;">
-    <strong>STRINGDB Confidence Score</strong>
+    <strong>Confidence Score</strong>
     <div style="width: 250px; height: 15px; background: linear-gradient(to right, red, green); border: 1px solid #ccc;"></div>
     <div style="display: flex; justify-content: space-between; font-size: 12px; color: white;">
       <span>Low (0.0)</span>
@@ -150,6 +150,7 @@
   const timerStep = 10800;
   var currTimerStep = timerStep;
   var currLayout = 'Force-Directed';
+  var numLayers = 4; // for concentric spherical layout
   var edgeColor = 'Confidence';
   var organism = '9606'; // human
   var isMinimized = false;
@@ -513,7 +514,7 @@
     const header = document.createElement("div");
     header.className = "modal-header";
     header.style.cssText = `
-      height: 30px;
+      height: 35px;
       background: #222;
       color: white;
       padding: 6px 6px; 
@@ -527,7 +528,7 @@
     closeBtn.textContent = "×";
     closeBtn.style.cssText = `
       position: absolute;
-      top: 5px;
+      top: 2px;
       right: 10px;
       background: none;
       border: none;
@@ -722,6 +723,7 @@
     this.MaxLinks = maxLimit;
     this.NodeDistance = collisonStrengthVal;
     this.Layout = currLayout;
+    this.NumLayers = numLayers;
     this.EdgeColor = edgeColor;
     this.Organism = organism; // Human
   };
@@ -852,8 +854,11 @@
     Graph.numDimensions(3);
   }
 
-  function forceConcentricSphere(nodes, baseRadius = 100, shellSpacing = 100) {
+  function forceConcentricSphere(nodes, numLayers = 4) {
     // sorting by degree and assign shells
+    let baseRadius = 100;
+    let shellSpacing = 100;
+
     const degrees = nodes.map(n => ({
       id: n.id,
       degree: n.neighbors ? n.neighbors.length : 0
@@ -866,7 +871,7 @@
     const layerMap = {};
     degrees.forEach(({ id, degree }) => {
       const normalized = (degree - minDegree) / (maxDegree - minDegree + 1e-6); // normalize [0,1]
-      const layer = Math.round(normalized * 3); // e.g., 4 shells: 0 (inner) to 3 (outer)
+      const layer = Math.round(normalized * (numLayers - 1));
       layerMap[id] = layer;
     });
 
@@ -899,8 +904,8 @@
     Graph.d3ReheatSimulation(); // Restart the layout animation
   }
 
-  function applySphericalLayout(nodes) {
-    Graph.d3Force('spherical', forceConcentricSphere(nodes))  // custom radial layout
+  function applySphericalLayout(nodes, numLayers = 4) {
+    Graph.d3Force('spherical', forceConcentricSphere(nodes, numLayers))  // custom radial layout
           .nodeVal(node => {
             const layer = node.shellLayer ?? 0;
             return 0.3 + layer; // smaller node size for inner layer
@@ -943,25 +948,26 @@
   // folder2.add({ 'Enter': updateLinkCount }, 'Enter');
   // folder2.open();
 
+  var layerController = null;
+
   var folder3 = gui.addFolder('GUI Buttons');
   folder3.add({ 'Zoom to Fit': zoomToFit }, 'Zoom to Fit');
-  folder3.add(settings, 'Layout', ['Force-Directed', 'Spherical']).onChange(val => {
-    if (val === 'Force-Directed') {
-      applyForceDirectedLayout();
-      currLayout = 'Force-Directed';
-    } else if (val === 'Spherical') {
-      applySphericalLayout(Graph.graphData().nodes);
-      Graph.graphData(Graph.graphData());
-      currLayout = 'Spherical';
-    }
-  });
-  folder3.add(settings, 'EdgeColor', ['Confidence', 'DB']).onChange(val => {
+  // var linkDir = folder3.add(settings, 'ShowLinkDirections').name('LinkDirections');
+  // linkDir.onChange(toggleLinkAnimation);
+  // var neighbors = folder3.add(settings, 'ShowNodeNeighbors').name('NodeNeighbors');
+  // neighbors.onChange(showNodeNeighbors);
+  folder3.add({ 'Show Link Directions': toggleLinkAnimation }, 'Show Link Directions');
+  // folder3.add({ 'Show Link Width': toggleLinkWidth }, 'Show Link Width');
+  folder3.add({ 'Show Node Neighbors': showNodeNeighbors }, 'Show Node Neighbors');
+  folder3.add({ 'Pause/Resume Data Reload': pauseResumeDataLoad }, 'Pause/Resume Data Reload');
+  folder3.add({ 'Load File': startDataLoad }, 'Load File');
+  folder3.add(settings, 'EdgeColor', ['Confidence', 'Local DB']).onChange(val => {
     edgeColor = val;
     document.querySelectorAll('.edge-legend').forEach(el => el.style.display = 'none');
     // Show the selected legend
     if (val === 'Confidence') {
       document.getElementById('legend-confidence').style.display = 'block';
-    } else if (val === 'DB') {
+    } else if (val === 'Local DB') {
       document.getElementById('legend-db').style.display = 'block';
     }
     Graph.linkColor(link => {
@@ -972,15 +978,31 @@
       }
     });
   });
-  // var linkDir = folder3.add(settings, 'ShowLinkDirections').name('LinkDirections');
-  // linkDir.onChange(toggleLinkAnimation);
-  // var neighbors = folder3.add(settings, 'ShowNodeNeighbors').name('NodeNeighbors');
-  // neighbors.onChange(showNodeNeighbors);
-  folder3.add({ 'Show Link Directions': toggleLinkAnimation }, 'Show Link Directions');
-  // folder3.add({ 'Show Link Width': toggleLinkWidth }, 'Show Link Width');
-  folder3.add({ 'Show Node Neighbors': showNodeNeighbors }, 'Show Node Neighbors');
-  folder3.add({ 'Pause/Resume Data Reload': pauseResumeDataLoad }, 'Pause/Resume Data Reload');
-  folder3.add({ 'Load File': startDataLoad }, 'Load File');
+  folder3.add(settings, 'Layout', ['Force-Directed', 'Spherical']).onChange(val => {
+    if (layerController) {
+      folder3.remove(layerController);
+      layerController = null;
+    }
+    if (val === 'Force-Directed') {
+      applyForceDirectedLayout();
+      currLayout = 'Force-Directed';
+    } else if (val === 'Spherical') {
+      applySphericalLayout(Graph.graphData().nodes);
+      Graph.graphData(Graph.graphData());
+      currLayout = 'Spherical';
+
+      // adding controller for the number of layers in the Concentric Spherical layout
+      layerController = folder3
+        .add(settings, "NumLayers", 1, 10, 1)
+        .name('Layers')
+          .onChange(val => {
+              numLayers = val;
+              applySphericalLayout(Graph.graphData().nodes, val);
+              Graph.graphData(Graph.graphData());
+          });
+      layerController.setValue(settings.NumLayers);
+    }
+  });
   folder3.open();
 
   // main graph load and backend data update listener

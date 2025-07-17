@@ -63,3 +63,17 @@ div.dg.ac{
     align-items: center;
     margin-bottom: 5px;
 }
+
+.dg .cr.number {
+  display: flex;
+  align-items: center;  
+  justify-content: space-between; 
+}
+
+.dg .cr.number input[type="text"] {
+  text-align: center;   
+  height: 24px;         
+  line-height: 24px;     
+  padding: 2px 6px;
+  margin: 0;
+}
