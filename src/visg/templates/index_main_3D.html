@@ -93,24 +93,24 @@
     </div>
   </div>
   <div id="legend-db" class='edge-legend' style="position: fixed; display:none; z-index: 10; right: 700px; bottom: 35px;">
-    <strong>Local DB</strong>
+    <strong>Custom Edges</strong>
     <div style="margin-top: 5px;">
-      <div style="cursor: pointer;" class="legend-item" data-color="red">
+      <div style="cursor: pointer;" class="legend-item selected" data-color="red">
         <div style="width: 12px; height: 12px; background-color: red; border: 1px solid white; margin-right: 8px;"></div>
         Not in big_table or STRING (novel)
       </div>
-      <div style="cursor: pointer;" class="legend-item" data-color="orange">
+      <div style="cursor: pointer;" class="legend-item selected" data-color="orange">
         <div style="width: 12px; height: 12px; background-color: orange; border: 1px solid white; margin-right: 8px;"></div>
         In big_table, not in STRING
       </div>
-      <div style="cursor: pointer;" class="legend-item" data-color="blue">
+      <div style="cursor: pointer;" class="legend-item selected" data-color="blue">
         <div style="width: 12px; height: 12px; background-color: blue; border: 1px solid white; margin-right: 8px;"></div>
         In STRING, not in big_table</div>
-      <div style="cursor: pointer;" class="legend-item" data-color="green">
+      <div style="cursor: pointer;" class="legend-item selected" data-color="green">
         <div style="width: 12px; height: 12px; background-color: green; border: 1px solid white; margin-right: 8px;"></div>
         High score in both sources</div>
       </div>
-      <div style="cursor: pointer;" class="legend-item" data-color="gray">
+      <div style="cursor: pointer;" class="legend-item selected" data-color="gray">
         <div style="width: 12px; height: 12px; background-color: gray; border: 1px solid white; margin-right: 8px;"></div>
         None of the above</div>
       </div>
@@ -155,6 +155,7 @@
   var organism = '9606'; // human
   var isMinimized = false;
   var activeLink = null;
+  var activeLinks = new Set(['red', 'orange', 'blue', 'green', 'gray'])
 
   const confidenceColorScale = d3.scaleLinear()
     .domain([0, 1.0])  
@@ -202,7 +203,7 @@
           .nodeVal(node => (node.neighbors.length > 20 && node.neighbors.length < 30) ? 2 : (node.neighbors.length >= 30) ? 3 : 1)
           .nodeResolution(20)
           // .linkColor(link => link.color ? link.color : 'gray' )
-          .linkColor(link => link.score ? confidenceColorScale(link.score) : 'gray')
+          .linkColor(link => link[organism].score ? confidenceColorScale(link[organism].score) : 'gray')
           .linkOpacity(1)
           .linkDirectionalParticles(link => {
             if(showLinkParticle)
@@ -295,17 +296,56 @@
         .d3Force('link');
   } 
 
+  // function filterLink(link) {
+  //   if (!activeLink) return true;
+  //   const linkColor = link.color || 'gray';
+  //   return linkColor === activeLink;
+  // }
+
+  function filterLink(link) {
+    const linkColor = link.color || 'gray';
+    // If multi-selection is active
+    if (activeLinks.size > 0) {
+      return activeLinks.has(linkColor);
+    }
+    // If a single hovered item is active
+    if (activeLink) {
+      return linkColor === activeLink;
+    }
+    // No filtering – show all
+    return true;
+  }
+
   document.querySelectorAll('.legend-item').forEach(item => {
+    const color = item.getAttribute('data-color');
+
     item.addEventListener('mouseenter', () => {
-      activeLink = item.getAttribute('data-color');
-      Graph.linkVisibility(filterLink);
+      if (activeLinks.size === 0) {
+        activeLink = color;
+        Graph.linkVisibility(filterLink);
+      }
     });
 
     item.addEventListener('mouseleave', () => {
+      if (activeLinks.size === 0) {
+        activeLink = null;
+        Graph.linkVisibility(filterLink);
+      }
+    });
+
+    item.addEventListener('click', () => {
+      if (activeLinks.has(color)) {
+        activeLinks.delete(color);
+        item.classList.remove('selected');
+      } else {
+        activeLinks.add(color);
+        item.classList.add('selected');
+      }
       activeLink = null;
+
       Graph.linkVisibility(filterLink);
     });
-  });
+});
 
   // trigger update of highlighted objects in scene
   function updateHighlight() {
@@ -369,12 +409,6 @@
   function resetGraph(){
     Graph.graphData(initData)
 
-  }
-
-  function filterLink(link) {
-    if (!activeLink) return true;
-    const linkColor = link.color || 'gray';
-    return linkColor === activeLink;
   }
 
 
@@ -721,11 +755,14 @@
     this.redDistance = 10000;
     this.MinLinks = minLimit;
     this.MaxLinks = maxLimit;
+    this.showAlLinks = true;
     this.NodeDistance = collisonStrengthVal;
     this.Layout = currLayout;
     this.NumLayers = numLayers;
     this.EdgeColor = edgeColor;
-    this.Organism = organism; // Human
+    this.Human = true;
+    this.Mouse = true;
+    this.Yeast = true;
   };
 
 
@@ -951,23 +988,37 @@
   var layerController = null;
 
   var folder3 = gui.addFolder('GUI Buttons');
+  var folder4 = gui.addFolder('Organisms');
+  var folder5 = gui.addFolder('Settings');
+
   folder3.add({ 'Zoom to Fit': zoomToFit }, 'Zoom to Fit');
   // var linkDir = folder3.add(settings, 'ShowLinkDirections').name('LinkDirections');
   // linkDir.onChange(toggleLinkAnimation);
   // var neighbors = folder3.add(settings, 'ShowNodeNeighbors').name('NodeNeighbors');
   // neighbors.onChange(showNodeNeighbors);
+  folder3.add({ showAllLinks: () => {
+    Graph.linkVisibility(() => true); 
+    d3.selectAll('.legend-item').classed('selected', true);
+  }}, 'showAllLinks').name('Show All Links');
   folder3.add({ 'Show Link Directions': toggleLinkAnimation }, 'Show Link Directions');
   // folder3.add({ 'Show Link Width': toggleLinkWidth }, 'Show Link Width');
   folder3.add({ 'Show Node Neighbors': showNodeNeighbors }, 'Show Node Neighbors');
-  folder3.add({ 'Pause/Resume Data Reload': pauseResumeDataLoad }, 'Pause/Resume Data Reload');
   folder3.add({ 'Load File': startDataLoad }, 'Load File');
-  folder3.add(settings, 'EdgeColor', ['Confidence', 'Local DB']).onChange(val => {
+  folder3.add({ 'Pause/Resume Data Reload': pauseResumeDataLoad }, 'Pause/Resume Data Reload');
+  folder3.open()
+
+  folder4.add(settings, "Human").name('Human');
+  folder4.add(settings, "Mouse").name('Mouse');
+  folder4.add(settings, "Yeast").name('Yeast');
+  folder4.open();
+  
+  folder5.add(settings, 'EdgeColor', ['Confidence', 'Custom']).onChange(val => {
     edgeColor = val;
     document.querySelectorAll('.edge-legend').forEach(el => el.style.display = 'none');
     // Show the selected legend
     if (val === 'Confidence') {
       document.getElementById('legend-confidence').style.display = 'block';
-    } else if (val === 'Local DB') {
+    } else if (val === 'Custom') {
       document.getElementById('legend-db').style.display = 'block';
     }
     Graph.linkColor(link => {
@@ -978,9 +1029,9 @@
       }
     });
   });
-  folder3.add(settings, 'Layout', ['Force-Directed', 'Spherical']).onChange(val => {
+  folder5.add(settings, 'Layout', ['Force-Directed', 'Spherical']).onChange(val => {
     if (layerController) {
-      folder3.remove(layerController);
+      folder5.remove(layerController);
       layerController = null;
     }
     if (val === 'Force-Directed') {
@@ -992,7 +1043,7 @@
       currLayout = 'Spherical';
 
       // adding controller for the number of layers in the Concentric Spherical layout
-      layerController = folder3
+      layerController = folder5
         .add(settings, "NumLayers", 1, 10, 1)
         .name('Layers')
           .onChange(val => {
@@ -1003,7 +1054,7 @@
       layerController.setValue(settings.NumLayers);
     }
   });
-  folder3.open();
+  folder5.open()
 
   // main graph load and backend data update listener
   startDataLoad();
