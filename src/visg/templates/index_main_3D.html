@@ -155,7 +155,8 @@
   var organism = '9606'; // human
   var isMinimized = false;
   var activeLink = null;
-  var activeLinks = new Set(['red', 'orange', 'blue', 'green', 'gray'])
+  var activeLinks = new Set(['red', 'orange', 'blue', 'green', 'gray']);
+  var activeSpecies = new Set([9606, 10090, 4932, "N/A"]);
 
   const confidenceColorScale = d3.scaleLinear()
     .domain([0, 1.0])  
@@ -203,7 +204,7 @@
           .nodeVal(node => (node.neighbors.length > 20 && node.neighbors.length < 30) ? 2 : (node.neighbors.length >= 30) ? 3 : 1)
           .nodeResolution(20)
           // .linkColor(link => link.color ? link.color : 'gray' )
-          .linkColor(link => link[organism].score ? confidenceColorScale(link[organism].score) : 'gray')
+          .linkColor(link => link.score ? confidenceColorScale(link.score) : 'gray')
           .linkOpacity(1)
           .linkDirectionalParticles(link => {
             if(showLinkParticle)
@@ -296,13 +297,7 @@
         .d3Force('link');
   } 
 
-  // function filterLink(link) {
-  //   if (!activeLink) return true;
-  //   const linkColor = link.color || 'gray';
-  //   return linkColor === activeLink;
-  // }
-
-  function filterLink(link) {
+  function filterLinkByColor(link) {
     const linkColor = link.color || 'gray';
     // If multi-selection is active
     if (activeLinks.size > 0) {
@@ -319,20 +314,6 @@
   document.querySelectorAll('.legend-item').forEach(item => {
     const color = item.getAttribute('data-color');
 
-    item.addEventListener('mouseenter', () => {
-      if (activeLinks.size === 0) {
-        activeLink = color;
-        Graph.linkVisibility(filterLink);
-      }
-    });
-
-    item.addEventListener('mouseleave', () => {
-      if (activeLinks.size === 0) {
-        activeLink = null;
-        Graph.linkVisibility(filterLink);
-      }
-    });
-
     item.addEventListener('click', () => {
       if (activeLinks.has(color)) {
         activeLinks.delete(color);
@@ -343,7 +324,7 @@
       }
       activeLink = null;
 
-      Graph.linkVisibility(filterLink);
+      Graph.linkVisibility(filterLinkByColor);
     });
 });
 
@@ -763,6 +744,7 @@
     this.Human = true;
     this.Mouse = true;
     this.Yeast = true;
+    this.NA = true;
   };
 
 
@@ -850,10 +832,6 @@
     } else {
       alert("Protein not found in the graph.");
     }
-  }
-
-  const updateOrganismId = (value) => {
-    organism = value;
   }
 
   //Zoom to Fit
@@ -949,6 +927,23 @@
           })
   }
 
+  function filterLinkByOrganism(link) {
+    const species = link.organism;
+    if (activeSpecies.size > 0) {
+      return activeSpecies.has(species);
+    }
+  }
+
+  const updateLinks = () => {
+    activeSpecies.clear();
+    if (settings.Human) activeSpecies.add(9606);
+    if (settings.Mouse) activeSpecies.add(10090);
+    if (settings.Yeast) activeSpecies.add(4932);
+    if (settings.NA) activeSpecies.add("N/A");
+
+    Graph.linkVisibility(filterLinkByOrganism);
+  }
+
   // showLinkWidth
   const toggleLinkWidth = () => {
     showLinkWidth = !showLinkWidth;
@@ -1007,9 +1002,10 @@
   folder3.add({ 'Pause/Resume Data Reload': pauseResumeDataLoad }, 'Pause/Resume Data Reload');
   folder3.open()
 
-  folder4.add(settings, "Human").name('Human');
-  folder4.add(settings, "Mouse").name('Mouse');
-  folder4.add(settings, "Yeast").name('Yeast');
+  folder4.add(settings, "Human").name('Human').onChange(updateLinks);
+  folder4.add(settings, "Mouse").name('Mouse').onChange(updateLinks);
+  folder4.add(settings, "Yeast").name('Yeast').onChange(updateLinks);
+  folder4.add(settings, "NA").name('Unknown').onChange(updateLinks);
   folder4.open();
   
   folder5.add(settings, 'EdgeColor', ['Confidence', 'Custom']).onChange(val => {
