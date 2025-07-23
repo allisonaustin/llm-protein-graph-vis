@@ -125,6 +125,19 @@
       </div>
     </div>
   </div>
+  <div id="tooltip" style="
+    position: absolute;
+    background-color: rgba(0,0,0,0.7);
+    color: white;
+    padding: 5px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+    z-index: 10000;
+  ">
+  </div>
   <!-- <img src="./static/data/logos_all.png" style="position: fixed; z-index: 10; padding-left: 5px; padding-top: 25px; " alt="ANL" width="445" height="65"> -->
   <img src="./static/data/ALCF.png" style="position: fixed; z-index: 10; right: 360px; padding-top: 25px; " alt="ANL" width="200" height="auto"> 
   <img src="./static/data/intel.png" style="position: fixed; z-index: 10; right: 240px; padding-top: 25px; " alt="Intel" width="70" height="auto"> 
@@ -144,6 +157,7 @@
   let counter = 0;
   const highlightNodes = new Set(); 
   const highlightLinks = new Set();
+  const organisms = {human: 9606, mouse: 10090, yeast: 4932}
   let hoverNodes = new Set(); // selected (red) nodes
   let hoverNode = null;
   let showLinkParticle = false;
@@ -165,7 +179,7 @@
   var isMinimized = false;
   var activeLink = null;
   var activeLinks = new Set(['red', 'orange', 'blue', 'green', 'gray']);
-  var activeSpecies = new Set([9606, 10090, 4932, "N/A"]);
+  var activeSpecies = new Set([9606, 10090, 4932, "N/A"]); // all + N/A by default
 
   const confidenceColorScale = d3.scaleLinear()
     .domain([0, 1.0])  
@@ -505,15 +519,18 @@
 
   // getting PDB ID from gene name using UniProt REST API
   async function getPDBIdFromGene(geneName) {
-    const url = `https://rest.uniprot.org/uniprotkb/search?query=gene:${geneName}+AND+organism_id:${organism}&fields=accession,xref_pdb&format=json`;
+    const url = `https://rest.uniprot.org/uniprotkb/search?query=gene:${geneName}&fields=accession,xref_pdb&format=json`;
     const res = await fetch(url);
     const data = await res.json();
 
-    const pdbIds = data?.results?.[0]?.uniProtKBCrossReferences
-      ?.filter(ref => ref.database === 'PDB')
-      .map(ref => ref.id);
+    for (const result of data.results || []) {
+      const pdbRefs = result.uniProtKBCrossReferences?.filter(ref => ref.database === 'PDB');
+      if (pdbRefs?.length) {
+        return pdbRefs[0].id;
+      }
+    }
 
-    return pdbIds?.[0] || null;
+    return null; 
   }
 
   function createProteinModal(gene, pdbId) {
@@ -525,7 +542,7 @@
     modal.style.cssText = `
       position: fixed;
       top: 100px;
-      left: 100px;
+      left: 300px;
       width: 300px;
       height: 280px;
       background: white;
@@ -663,6 +680,8 @@
 
     const scores = links.map(d => d.score).filter(d => d !== undefined);
 
+    const tooltip = d3.select("#tooltip");
+
     const x = d3.scaleLinear()
       .domain([0, 1])
       .range([margin.left, width - margin.right]);
@@ -683,7 +702,18 @@
         .attr("y", d => y(d.length))
         .attr("width", d => Math.max(0, x(d.x1) - x(d.x0) - 1))
         .attr("height", d => y(0) - y(d.length))
-        .attr("fill", "#6ea8fe");
+        .attr("fill", "#6ea8fe")
+        .on("mouseover", function(event, d) {
+          tooltip.style("opacity", 1)
+                .html(`Count: ${d.length}`)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 28) + "px");
+          d3.select(this).attr("fill", "#40a070"); // Highlight bar
+        })
+        .on("mouseout", function() {
+          tooltip.style("opacity", 0);
+          d3.select(this).attr("fill", "#6ea8fe"); // Reset color
+        });
 
     svg.append("g")
       .attr("transform", `translate(0,${height - margin.bottom})`)
