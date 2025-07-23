@@ -63,6 +63,15 @@
   </div>
 
   <div id="info-body">
+    <!-- Interaction score distribution -->
+    <div class="card bg-dark text-white shadow">
+      <div class="card-header bg-secondary text-white">
+        <span>Interaction Confidence Distribution</span>
+      </div>
+      <div class="card-body p-2">
+        <svg id="score-histogram" width="280" height="150"></svg>
+      </div>
+    </div>
       <!-- Protein Search -->
       <div class="card bg-dark text-white shadow">
       <div class="card-body p-2 d-flex">
@@ -454,6 +463,7 @@
 
     // Sijax.request("getProteinStats")
     setStats(nlen, llen);
+    drawConfidenceHistogram(result.links);
 
     Graph.graphData(result);
     if (currLayout === 'Spherical') {
@@ -641,6 +651,47 @@
     const line = document.getElementById(`line-${gene}`);
     if (modal) modal.remove();
     if (line) line.remove();
+  }
+
+  function drawConfidenceHistogram(links) {
+    const svg = d3.select("#score-histogram");
+    svg.selectAll("*").remove(); // clear previous chart
+
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+    const margin = { top: 10, right: 10, bottom: 30, left: 30 };
+
+    const scores = links.map(d => d.score).filter(d => d !== undefined);
+
+    const x = d3.scaleLinear()
+      .domain([0, 1])
+      .range([margin.left, width - margin.right]);
+
+    const bins = d3.histogram()
+      .domain(x.domain())
+      .thresholds(x.ticks(20))(scores);
+
+    const y = d3.scaleLinear()
+      .domain([0, d3.max(bins, d => d.length)]).nice()
+      .range([height - margin.bottom, margin.top]);
+
+    const bar = svg.append("g")
+      .selectAll("rect")
+      .data(bins)
+      .join("rect")
+        .attr("x", d => x(d.x0) + 1)
+        .attr("y", d => y(d.length))
+        .attr("width", d => Math.max(0, x(d.x1) - x(d.x0) - 1))
+        .attr("height", d => y(0) - y(d.length))
+        .attr("fill", "#6ea8fe");
+
+    svg.append("g")
+      .attr("transform", `translate(0,${height - margin.bottom})`)
+      .call(d3.axisBottom(x).ticks(5));
+
+    svg.append("g")
+      .attr("transform", `translate(${margin.left},0)`)
+      .call(d3.axisLeft(y).ticks(5));
   }
 
   function updateConnectorLine(geneId, pdbId) {
