@@ -56,6 +56,11 @@
      ">
 </svg>
 
+<ul id="context-menu" class="list-group position-absolute shadow bg-dark text-white border border-secondary p-2 rounded" style="display: none; z-index: 1050;">
+  <li class="list-group-item bg-dark text-white border-0" onclick="createProteinModal()">Show 3D structure</li>
+  <li class="list-group-item bg-dark text-white border-0" onclick="promptGraphLLM()">Ask LLM</li>
+</ul>
+
 <div id="protein-info-container" class="card bg-dark text-white position-fixed bottom-0 start-0 m-4 shadow" style="width: 20rem; height: auto; z-index: 1000;">
   <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
     <span>Protein Info</span>
@@ -159,7 +164,7 @@
   const highlightLinks = new Set();
   const organisms = {human: 9606, mouse: 10090, yeast: 4932}
   let hoverNodes = new Set(); // selected (red) nodes
-  let hoverNode = null;
+  let focusNode = null;
   let showLinkParticle = false;
   let showNeighbors = false;
   let enableNodeDragging = false;
@@ -179,7 +184,7 @@
   var isMinimized = false;
   var activeLink = null;
   var activeLinks = new Set(['red', 'orange', 'blue', 'green', 'gray']);
-  var activeSpecies = new Set([9606, 10090, 4932, "N/A"]); // all + N/A by default
+  var activeSpecies = new Set(["9606", "10090", "4932", "N/A"]); // all + N/A by default
 
   const confidenceColorScale = d3.scaleLinear()
     .domain([0, 1.0])  
@@ -263,14 +268,12 @@
               node.neighbors.forEach(neighbor => highlightNodes.delete(neighbor));
               node.links.forEach(link => highlightLinks.delete(link));
 
-              hoverNode = null;
               updateHighlight();
               closeProteinModal(node.id);
               return;
 
             }
 
-            hoverNode = !node ? null : node.id || null;
             if (node) {
               hoverNodes.add(node.id);
             }
@@ -278,12 +281,12 @@
             updateHighlight();
 
             console.log("Node selected:", node.id)
-
-            // ---- Load protein structure ----
-            getPDBIdFromGene(node.id).then(pdbId => {
-              if (pdbId) createProteinModal(node.id, pdbId);
-              else alert(`No PDB ID found for ${node.id}`);
-            });
+          })
+          .onNodeRightClick((node, event) => {
+            if (event) event.preventDefault(); 
+            if (!node) return;
+            focusNode = node.id;
+            showCustomContextMenu(node, event.clientX, event.clientY);
           })
           .onLinkClick(link => {
 
@@ -525,6 +528,7 @@
 
     for (const result of data.results || []) {
       const pdbRefs = result.uniProtKBCrossReferences?.filter(ref => ref.database === 'PDB');
+      console.log(pdbRefs)
       if (pdbRefs?.length) {
         return pdbRefs[0].id;
       }
@@ -533,134 +537,143 @@
     return null; 
   }
 
-  function createProteinModal(gene, pdbId) {
-    const container = document.getElementById("protein-frame-container");
+  function createProteinModal() {
+    if (!focusNode) return;
+    // ---- Load protein structure ----
+    getPDBIdFromGene(focusNode).then(pdbId => {
+      if (!pdbId) {
+        alert(`No PDB ID found for ${focusNode}`);
+        return;
+      } else {
+        let gene = focusNode;
+        const container = document.getElementById("protein-frame-container");
 
-    // Create modal wrapper
-    const modal = document.createElement("div");
-    modal.className = "draggable resizable protein-modal";
-    modal.style.cssText = `
-      position: fixed;
-      top: 100px;
-      left: 300px;
-      width: 300px;
-      height: 280px;
-      background: white;
-      border: 2px solid #444;
-      z-index: 1000;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-      overflow: hidden;
-    `;
-    modal.id = `protein-modal-${gene}`;
+        // Create modal wrapper
+        const modal = document.createElement("div");
+        modal.className = "draggable resizable protein-modal";
+        modal.style.cssText = `
+          position: fixed;
+          top: 100px;
+          left: 300px;
+          width: 300px;
+          height: 280px;
+          background: white;
+          border: 2px solid #444;
+          z-index: 1000;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+          overflow: hidden;
+        `;
+        modal.id = `protein-modal-${gene}`;
 
-    const header = document.createElement("div");
-    header.className = "modal-header";
-    header.style.cssText = `
-      height: 35px;
-      background: #222;
-      color: white;
-      padding: 6px 6px; 
-      cursor: move;
-      font-family: 'Lucida Grande', sans-serif;
-    `;
-    header.textContent = `3D Structure: ${gene} (${pdbId})`;
+        const header = document.createElement("div");
+        header.className = "modal-header";
+        header.style.cssText = `
+          height: 35px;
+          background: #222;
+          color: white;
+          padding: 6px 6px; 
+          cursor: move;
+          font-family: 'Lucida Grande', sans-serif;
+        `;
+        header.textContent = `3D Structure: ${gene} (${pdbId})`;
 
-    // Close button
-    const closeBtn = document.createElement("button");
-    closeBtn.textContent = "×";
-    closeBtn.style.cssText = `
-      position: absolute;
-      top: 2px;
-      right: 10px;
-      background: none;
-      border: none;
-      font-size: 20px;
-      color: white;
-      font-weight: bold;
-      cursor: pointer;
-      z-index: 1;
-    `;
-    closeBtn.onclick = () => modal.remove();
+        // Close button
+        const closeBtn = document.createElement("button");
+        closeBtn.textContent = "×";
+        closeBtn.style.cssText = `
+          position: absolute;
+          top: 2px;
+          right: 10px;
+          background: none;
+          border: none;
+          font-size: 20px;
+          color: white;
+          font-weight: bold;
+          cursor: pointer;
+          z-index: 1;
+        `;
+        closeBtn.onclick = () => modal.remove();
 
-    // frame
-    const frame = document.createElement("iframe");
-    frame.src = `https://molstar.org/viewer/?pdb=${pdbId}&hide-controls=1&collapse-left-panel=1`;
-    frame.style.cssText = `
-      width: 100%;
-      height: calc(100% - 30px);
-      border: none;
-    `;
-    frame.id = `protein-frame-${gene}`;
+        // frame
+        const frame = document.createElement("iframe");
+        frame.src = `https://molstar.org/viewer/?pdb=${pdbId}&hide-controls=1&collapse-left-panel=1`;
+        frame.style.cssText = `
+          width: 100%;
+          height: calc(100% - 30px);
+          border: none;
+        `;
+        frame.id = `protein-frame-${gene}`;
 
-    // building DOM
-    modal.appendChild(header);
-    modal.appendChild(closeBtn);
-    modal.appendChild(frame);
-    container.appendChild(modal);
+        // building DOM
+        modal.appendChild(header);
+        modal.appendChild(closeBtn);
+        modal.appendChild(frame);
+        container.appendChild(modal);
 
-    requestAnimationFrame(() => {
-      updateConnectorLine(Graph.graphData().nodes.find(n => n.id === gene), modal);
-    });
+        requestAnimationFrame(() => {
+          updateConnectorLine(Graph.graphData().nodes.find(n => n.id === gene), modal);
+        });
 
-    // adding interactions
-    interact(modal)
-      .draggable({
-        allowFrom: '.modal-header',
-        listeners: {
-          move(event) {
-            const target = event.target;
-            const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
-            const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+        // adding interactions
+        interact(modal)
+          .draggable({
+            allowFrom: '.modal-header',
+            listeners: {
+              move(event) {
+                const target = event.target;
+                const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+                const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
 
-            target.style.transform = `translate(${x}px, ${y}px)`;
-            target.setAttribute('data-x', x);
-            target.setAttribute('data-y', y);
-            
-            // updating line
-            const gene = target.querySelector('.modal-header')?.textContent?.split(':')[1]?.trim()?.split(' ')[0];
-            const node = Graph.graphData().nodes.find(n => n.id === gene);
-            if (node) updateConnectorLine(node, target);
-          }
+                target.style.transform = `translate(${x}px, ${y}px)`;
+                target.setAttribute('data-x', x);
+                target.setAttribute('data-y', y);
+                
+                // updating line
+                const gene = target.querySelector('.modal-header')?.textContent?.split(':')[1]?.trim()?.split(' ')[0];
+                const node = Graph.graphData().nodes.find(n => n.id === gene);
+                if (node) updateConnectorLine(node, target);
+              }
+            }
+          })
+        
+        // adding a line element to the svg
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("id", `line-${gene}`);
+        line.setAttribute("stroke", "red");
+        line.setAttribute("stroke-width", "1.2");
+        line.setAttribute("stroke-dasharray", "5,5");
+        document.getElementById("modal-connectors").appendChild(line);
+
+        // updating line position on drag or animation
+        function updateLine() {
+          const nodePos = Graph.graph2ScreenCoords(
+            Graph.graphData().nodes.find(n => n.id === gene).x,
+            Graph.graphData().nodes.find(n => n.id === gene).y,
+            Graph.graphData().nodes.find(n => n.id === gene).z
+          );
+
+          const modalRect = modal.getBoundingClientRect();
+          const modalX = modalRect.left + modalRect.width / 2;
+          const modalY = modalRect.top + modalRect.height / 2;
+
+          line.setAttribute("x1", nodePos.x);
+          line.setAttribute("y1", nodePos.y);
+          line.setAttribute("x2", modalX);
+          line.setAttribute("y2", modalY);
         }
-      })
 
+        // Call once and on animation frames
+        updateLine();
+        const lineInterval = setInterval(updateLine, 30); // keep line updated while dragging
 
-    // adding a line element to the svg
-    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    line.setAttribute("id", `line-${gene}`);
-    line.setAttribute("stroke", "red");
-    line.setAttribute("stroke-width", "1.2");
-    line.setAttribute("stroke-dasharray", "5,5");
-    document.getElementById("modal-connectors").appendChild(line);
-
-    // updating line position on drag or animation
-    function updateLine() {
-      const nodePos = Graph.graph2ScreenCoords(
-        Graph.graphData().nodes.find(n => n.id === gene).x,
-        Graph.graphData().nodes.find(n => n.id === gene).y,
-        Graph.graphData().nodes.find(n => n.id === gene).z
-      );
-
-      const modalRect = modal.getBoundingClientRect();
-      const modalX = modalRect.left + modalRect.width / 2;
-      const modalY = modalRect.top + modalRect.height / 2;
-
-      line.setAttribute("x1", nodePos.x);
-      line.setAttribute("y1", nodePos.y);
-      line.setAttribute("x2", modalX);
-      line.setAttribute("y2", modalY);
-    }
-
-    // Call once and on animation frames
-    updateLine();
-    const lineInterval = setInterval(updateLine, 30); // keep line updated while dragging
-
-    // Remove line on modal close
-    closeBtn.onclick = () => {
-      modal.remove();
-      line.remove();
-      clearInterval(lineInterval);
-    };
+        // Remove line on modal close
+        closeBtn.onclick = () => {
+          modal.remove();
+          line.remove();
+          clearInterval(lineInterval);
+        };
+      };
+    });
   }
 
   function closeProteinModal(gene) {
@@ -668,6 +681,18 @@
     const line = document.getElementById(`line-${gene}`);
     if (modal) modal.remove();
     if (line) line.remove();
+  }
+
+  function showCustomContextMenu(node, x, y) {
+    const menu = document.getElementById('context-menu');
+    if (!menu) return;
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+    menu.style.display = 'block';
+
+    document.addEventListener('click', () => {
+      menu.style.display = 'none';
+    }, { once: true });
   }
 
   function drawConfidenceHistogram(links) {
@@ -834,7 +859,6 @@
     if(!showLinkParticle){
       highlightNodes.clear();
       hoverNodes.clear();
-      hoverNode = null;
       highlightLinks.clear();
       updateHighlight();
     }
@@ -894,22 +918,15 @@
         highlightNodes.delete(node.id);
         node.neighbors.forEach(neighbor => highlightNodes.delete(neighbor));
         node.links.forEach(link => highlightLinks.delete(link));
-        hoverNode = null;
         updateHighlight();
         closeProteinModal(node.id);
         return;
 
       }
-      hoverNode = !node ? null : node.id || null;
       if (node) {
         hoverNodes.add(node.id);
       }
       updateHighlight();
-      // ---- Load protein structure ----
-      getPDBIdFromGene(node.id).then(pdbId => {
-        if (pdbId) createProteinModal(node.id, pdbId);
-        else alert(`No PDB ID found for ${node.id}`);
-      });
     } else {
       alert("Protein not found in the graph.");
     }
@@ -1009,7 +1026,7 @@
   }
 
   function filterLinkByOrganism(link) {
-    const species = link.organism;
+    const species = link.ncbiTaxonId;
     if (activeSpecies.size > 0) {
       return activeSpecies.has(species);
     }
@@ -1064,7 +1081,6 @@
   var layerController = null;
 
   var folder3 = gui.addFolder('GUI Buttons');
-  var folder4 = gui.addFolder('Organisms');
   var folder5 = gui.addFolder('Settings');
 
   folder3.add({ 'Zoom to Fit': zoomToFit }, 'Zoom to Fit');
@@ -1082,30 +1098,24 @@
   folder3.add({ 'Load File': startDataLoad }, 'Load File');
   folder3.add({ 'Pause/Resume Data Reload': pauseResumeDataLoad }, 'Pause/Resume Data Reload');
   folder3.open()
-
-  folder4.add(settings, "Human").name('Human').onChange(updateLinks);
-  folder4.add(settings, "Mouse").name('Mouse').onChange(updateLinks);
-  folder4.add(settings, "Yeast").name('Yeast').onChange(updateLinks);
-  folder4.add(settings, "NA").name('Unknown').onChange(updateLinks);
-  folder4.open();
   
-  folder5.add(settings, 'EdgeColor', ['Confidence', 'Custom']).onChange(val => {
-    edgeColor = val;
-    document.querySelectorAll('.edge-legend').forEach(el => el.style.display = 'none');
-    // Show the selected legend
-    if (val === 'Confidence') {
-      document.getElementById('legend-confidence').style.display = 'block';
-    } else if (val === 'Custom') {
-      document.getElementById('legend-db').style.display = 'block';
-    }
-    Graph.linkColor(link => {
-      if (val === 'Confidence') {
-        return link.score ? confidenceColorScale(link.score) : 'gray';
-      } else {
-        return link.color ? link.color : 'gray';
-      }
-    });
-  });
+  // folder5.add(settings, 'EdgeColor', ['Confidence', 'Custom']).onChange(val => {
+  //   edgeColor = val;
+  //   document.querySelectorAll('.edge-legend').forEach(el => el.style.display = 'none');
+  //   // Show the selected legend
+  //   if (val === 'Confidence') {
+  //     document.getElementById('legend-confidence').style.display = 'block';
+  //   } else if (val === 'Custom') {
+  //     document.getElementById('legend-db').style.display = 'block';
+  //   }
+  //   Graph.linkColor(link => {
+  //     if (val === 'Confidence') {
+  //       return link.score ? confidenceColorScale(link.score) : 'gray';
+  //     } else {
+  //       return link.color ? link.color : 'gray';
+  //     }
+  //   });
+  // });
   folder5.add(settings, 'Layout', ['Force-Directed', 'Spherical']).onChange(val => {
     if (layerController) {
       folder5.remove(layerController);
