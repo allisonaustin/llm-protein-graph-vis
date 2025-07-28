@@ -104,3 +104,31 @@ div.dg.ac{
 .list-item:hover {
     cursor: pointer;
 }
+
+#node-table {
+    font-size: small;
+    background-color: white;
+    color: black;
+    font-family: 'Lucida Grande', sans-serif;
+}
+
+#node-table tbody tr {
+  background-color: white;
+  color: black;
+}
+
+#node-table tbody tr:hover {
+  background-color: #e9ecef; 
+  cursor: pointer;
+}
+
+#node-table thead th {
+  padding: 4px 8px;  
+  background-color: #f8f9fa;
+  color: black;
+}
+
+#node-table_filter input {
+  outline: none;
+  box-shadow: none;
+}
