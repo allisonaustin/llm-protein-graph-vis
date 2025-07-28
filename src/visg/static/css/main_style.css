@@ -100,3 +100,7 @@ div.dg.ac{
 #context-menu li {
   padding: 6px 12px;
 }
+
+.list-item:hover {
+    cursor: pointer;
+}

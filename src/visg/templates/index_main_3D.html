@@ -42,7 +42,9 @@
 </div>
 <div id="3d-graph" style="position: fixed;"></div>
 
-<div id="protein-frame-container"></div>
+<div id="protein-frame-container">
+  
+</div>
 
 <svg id="modal-connectors"
      style="
@@ -57,8 +59,8 @@
 </svg>
 
 <ul id="context-menu" class="list-group position-absolute shadow bg-dark text-white border border-secondary p-2 rounded" style="display: none; z-index: 1050;">
-  <li class="list-group-item bg-dark text-white border-0" onclick="createProteinModal()">Show 3D structure</li>
-  <li class="list-group-item bg-dark text-white border-0" onclick="promptGraphLLM()">Ask LLM</li>
+  <li class="list-item bg-dark text-white border-0" onclick="createProteinModal()">Show 3D structure</li>
+  <li class="list-item bg-dark text-white border-0" onclick="promptGraphLLM()">Ask LLM</li>
 </ul>
 
 <div id="protein-info-container" class="card bg-dark text-white position-fixed bottom-0 start-0 m-4 shadow" style="width: 20rem; height: auto; z-index: 1000;">
@@ -184,7 +186,8 @@
   var isMinimized = false;
   var activeLink = null;
   var activeLinks = new Set(['red', 'orange', 'blue', 'green', 'gray']);
-  var activeSpecies = new Set(["9606", "10090", "4932", "N/A"]); // all + N/A by default
+  var uniqueTaxonIds = new Set();
+  var activeSpecies = {}; 
 
   const confidenceColorScale = d3.scaleLinear()
     .domain([0, 1.0])  
@@ -481,6 +484,21 @@
     // Sijax.request("getProteinStats")
     setStats(nlen, llen);
     drawConfidenceHistogram(result.links);
+    
+    // scanning new links for unique taxon Ids
+    var newIds = []
+    dataPart.links.forEach(link => {
+      const taxonId = link.ncbiTaxonId;
+      if (!uniqueTaxonIds.has(taxonId)) {
+        uniqueTaxonIds.add(taxonId);
+        newIds.push(taxonId);
+      }
+    });
+    newIds.forEach(id => {
+      activeSpecies[id] = true;
+      folder4.add(activeSpecies, id).onChange(updateLinks);
+    });
+    folder4.open();
 
     Graph.graphData(result);
     if (currLayout === 'Spherical') {
@@ -522,156 +540,210 @@
 
   // getting PDB ID from gene name using UniProt REST API
   async function getPDBIdFromGene(geneName) {
-    const url = `https://rest.uniprot.org/uniprotkb/search?query=gene:${geneName}&fields=accession,xref_pdb&format=json`;
+    const url = `https://rest.uniprot.org/uniprotkb/search?query=gene:${geneName}+AND+reviewed:true&fields=accession,organism_name,xref_pdb&format=json`;
     const res = await fetch(url);
     const data = await res.json();
 
+    const pdbStructures = [];
+
     for (const result of data.results || []) {
+      const organism = result.organism?.scientificName || "Unknown";
       const pdbRefs = result.uniProtKBCrossReferences?.filter(ref => ref.database === 'PDB');
-      console.log(pdbRefs)
-      if (pdbRefs?.length) {
-        return pdbRefs[0].id;
+      const pdbIds = pdbRefs.map(ref => ref.id);
+      
+      for (const ref of pdbRefs || []) {
+        pdbStructures.push({
+          pdbId: ref.id,
+          organism,
+        });
       }
     }
 
-    return null; 
+    return pdbStructures; 
   }
 
   function createProteinModal() {
     if (!focusNode) return;
+    let gene = focusNode;
     // ---- Load protein structure ----
-    getPDBIdFromGene(focusNode).then(pdbId => {
-      if (!pdbId) {
-        alert(`No PDB ID found for ${focusNode}`);
+    getPDBIdFromGene(gene).then(structures => {
+      if (!structures.length) {
+        alert(`No 3D structures found for ${gene}`);
         return;
-      } else {
-        let gene = focusNode;
-        const container = document.getElementById("protein-frame-container");
+      }
+      let currIdx = 0;
 
-        // Create modal wrapper
-        const modal = document.createElement("div");
-        modal.className = "draggable resizable protein-modal";
-        modal.style.cssText = `
-          position: fixed;
-          top: 100px;
-          left: 300px;
-          width: 300px;
-          height: 280px;
-          background: white;
-          border: 2px solid #444;
-          z-index: 1000;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-          overflow: hidden;
-        `;
-        modal.id = `protein-modal-${gene}`;
+      // Create modal wrapper
+      const modal = document.createElement("div");
+      modal.className = "draggable resizable protein-modal";
+      modal.style.cssText = `
+        position: fixed;
+        top: 100px;
+        left: 300px;
+        width: 300px;
+        height: 300px;
+        background: white;
+        border: 2px solid #444;
+        z-index: 1000;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        overflow: hidden;
+      `;
+      modal.id = `protein-modal-${gene}`;
 
-        const header = document.createElement("div");
-        header.className = "modal-header";
-        header.style.cssText = `
-          height: 35px;
-          background: #222;
-          color: white;
-          padding: 6px 6px; 
-          cursor: move;
-          font-family: 'Lucida Grande', sans-serif;
-        `;
-        header.textContent = `3D Structure: ${gene} (${pdbId})`;
+      const header = document.createElement("div");
+      header.className = "modal-header";
+      header.style.cssText = `
+        background: #222;
+        color: white;
+        padding: 6px;
+        cursor: move;
+        font-family: 'Lucida Grande', sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      `;
 
-        // Close button
-        const closeBtn = document.createElement("button");
-        closeBtn.textContent = "×";
-        closeBtn.style.cssText = `
-          position: absolute;
-          top: 2px;
-          right: 10px;
+      // Create title
+      const title = document.createElement("span");
+      title.style.cssText = `
+        font-size: 16px;
+        margin-bottom: 4px;
+      `;
+      header.appendChild(title);
+
+      // Create nav controls
+      const nav = document.createElement("div");
+      nav.innerHTML = `
+        <button id="prevPDB">⟨</button>
+        <button id="nextPDB">⟩</button>
+      `;
+      Array.from(nav.children).forEach(btn => {
+        btn.style.cssText = `
           background: none;
           border: none;
-          font-size: 20px;
           color: white;
-          font-weight: bold;
+          font-size: 18px;
+          margin: 0 4px;
           cursor: pointer;
-          z-index: 1;
         `;
-        closeBtn.onclick = () => modal.remove();
+      });
+      header.appendChild(nav);
 
-        // frame
-        const frame = document.createElement("iframe");
+      // Close button
+      const closeBtn = document.createElement("button");
+      closeBtn.textContent = "×";
+      closeBtn.style.cssText = `
+        position: absolute;
+        top: 2px;
+        right: 10px;
+        background: none;
+        border: none;
+        font-size: 20px;
+        color: white;
+        font-weight: bold;
+        cursor: pointer;
+        z-index: 1;
+      `;
+      closeBtn.onclick = () => modal.remove();
+
+      // frame
+      const frame = document.createElement("iframe");
+      frame.style.cssText = `
+        width: 100%;
+        height: calc(100% - 30px);
+        border: none;
+      `;
+      frame.id = `protein-frame-${gene}`;
+
+      // building DOM
+      modal.appendChild(header);
+      modal.appendChild(closeBtn);
+      modal.appendChild(frame);
+      const container = document.getElementById("protein-frame-container");
+      container.appendChild(modal);
+
+      function showStructure(gene, structures, index) {
+        const { pdbId, organism } = structures[index];
         frame.src = `https://molstar.org/viewer/?pdb=${pdbId}&hide-controls=1&collapse-left-panel=1`;
-        frame.style.cssText = `
-          width: 100%;
-          height: calc(100% - 30px);
-          border: none;
-        `;
-        frame.id = `protein-frame-${gene}`;
+        title.textContent = `${gene} | ${pdbId} (${organism})`;
+      }
 
-        // building DOM
-        modal.appendChild(header);
-        modal.appendChild(closeBtn);
-        modal.appendChild(frame);
-        container.appendChild(modal);
-
-        requestAnimationFrame(() => {
-          updateConnectorLine(Graph.graphData().nodes.find(n => n.id === gene), modal);
-        });
-
-        // adding interactions
-        interact(modal)
-          .draggable({
-            allowFrom: '.modal-header',
-            listeners: {
-              move(event) {
-                const target = event.target;
-                const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
-                const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
-
-                target.style.transform = `translate(${x}px, ${y}px)`;
-                target.setAttribute('data-x', x);
-                target.setAttribute('data-y', y);
-                
-                // updating line
-                const gene = target.querySelector('.modal-header')?.textContent?.split(':')[1]?.trim()?.split(' ')[0];
-                const node = Graph.graphData().nodes.find(n => n.id === gene);
-                if (node) updateConnectorLine(node, target);
-              }
-            }
-          })
-        
-        // adding a line element to the svg
-        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        line.setAttribute("id", `line-${gene}`);
-        line.setAttribute("stroke", "red");
-        line.setAttribute("stroke-width", "1.2");
-        line.setAttribute("stroke-dasharray", "5,5");
-        document.getElementById("modal-connectors").appendChild(line);
-
-        // updating line position on drag or animation
-        function updateLine() {
-          const nodePos = Graph.graph2ScreenCoords(
-            Graph.graphData().nodes.find(n => n.id === gene).x,
-            Graph.graphData().nodes.find(n => n.id === gene).y,
-            Graph.graphData().nodes.find(n => n.id === gene).z
-          );
-
-          const modalRect = modal.getBoundingClientRect();
-          const modalX = modalRect.left + modalRect.width / 2;
-          const modalY = modalRect.top + modalRect.height / 2;
-
-          line.setAttribute("x1", nodePos.x);
-          line.setAttribute("y1", nodePos.y);
-          line.setAttribute("x2", modalX);
-          line.setAttribute("y2", modalY);
+      document.getElementById("prevPDB").onclick = () => {
+        if (currIdx > 0) {
+          currIdx--;
+          showStructure(gene, structures, currIdx);
         }
+      };
+      document.getElementById("nextPDB").onclick = () => {
+        if (currIdx < structures.length - 1) {
+          currIdx++;
+          showStructure(gene, structures, currIdx);
+        }
+      };
 
-        // Call once and on animation frames
-        updateLine();
-        const lineInterval = setInterval(updateLine, 30); // keep line updated while dragging
+      showStructure(gene, structures, currIdx); // show first structure
 
-        // Remove line on modal close
-        closeBtn.onclick = () => {
-          modal.remove();
-          line.remove();
-          clearInterval(lineInterval);
-        };
+      requestAnimationFrame(() => {
+        updateConnectorLine(Graph.graphData().nodes.find(n => n.id === gene), modal);
+      });
+
+      // adding interactions
+      interact(modal)
+        .draggable({
+          allowFrom: '.modal-header',
+          listeners: {
+            move(event) {
+              const target = event.target;
+              const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+              const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+
+              target.style.transform = `translate(${x}px, ${y}px)`;
+              target.setAttribute('data-x', x);
+              target.setAttribute('data-y', y);
+              
+              // updating line
+              const gene = target.querySelector('.modal-header')?.textContent?.split(':')[1]?.trim()?.split(' ')[0];
+              const node = Graph.graphData().nodes.find(n => n.id === gene);
+              if (node) updateConnectorLine(node, target);
+            }
+          }
+        })
+      
+      // adding a line element to the svg
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("id", `line-${gene}`);
+      line.setAttribute("stroke", "red");
+      line.setAttribute("stroke-width", "1.2");
+      line.setAttribute("stroke-dasharray", "5,5");
+      document.getElementById("modal-connectors").appendChild(line);
+
+      // updating line position on drag or animation
+      function updateLine() {
+        const nodePos = Graph.graph2ScreenCoords(
+          Graph.graphData().nodes.find(n => n.id === gene).x,
+          Graph.graphData().nodes.find(n => n.id === gene).y,
+          Graph.graphData().nodes.find(n => n.id === gene).z
+        );
+
+        const modalRect = modal.getBoundingClientRect();
+        const modalX = modalRect.left + modalRect.width / 2;
+        const modalY = modalRect.top + modalRect.height / 2;
+
+        line.setAttribute("x1", nodePos.x);
+        line.setAttribute("y1", nodePos.y);
+        line.setAttribute("x2", modalX);
+        line.setAttribute("y2", modalY);
+      }
+
+      // Call once and on animation frames
+      updateLine();
+      const lineInterval = setInterval(updateLine, 30); // keep line updated while dragging
+
+      // Remove line on modal close
+      closeBtn.onclick = () => {
+        modal.remove();
+        line.remove();
+        clearInterval(lineInterval);
       };
     });
   }
@@ -847,10 +919,7 @@
     this.Layout = currLayout;
     this.NumLayers = numLayers;
     this.EdgeColor = edgeColor;
-    this.Human = true;
-    this.Mouse = true;
-    this.Yeast = true;
-    this.NA = true;
+    this.selectedTaxonId = null;
   };
 
 
@@ -1027,18 +1096,10 @@
 
   function filterLinkByOrganism(link) {
     const species = link.ncbiTaxonId;
-    if (activeSpecies.size > 0) {
-      return activeSpecies.has(species);
-    }
+    return activeSpecies[species];
   }
 
   const updateLinks = () => {
-    activeSpecies.clear();
-    if (settings.Human) activeSpecies.add(9606);
-    if (settings.Mouse) activeSpecies.add(10090);
-    if (settings.Yeast) activeSpecies.add(4932);
-    if (settings.NA) activeSpecies.add("N/A");
-
     Graph.linkVisibility(filterLinkByOrganism);
   }
 
@@ -1081,6 +1142,7 @@
   var layerController = null;
 
   var folder3 = gui.addFolder('GUI Buttons');
+  var folder4 = gui.addFolder('Organisms');
   var folder5 = gui.addFolder('Settings');
 
   folder3.add({ 'Zoom to Fit': zoomToFit }, 'Zoom to Fit');
@@ -1099,23 +1161,23 @@
   folder3.add({ 'Pause/Resume Data Reload': pauseResumeDataLoad }, 'Pause/Resume Data Reload');
   folder3.open()
   
-  // folder5.add(settings, 'EdgeColor', ['Confidence', 'Custom']).onChange(val => {
-  //   edgeColor = val;
-  //   document.querySelectorAll('.edge-legend').forEach(el => el.style.display = 'none');
-  //   // Show the selected legend
-  //   if (val === 'Confidence') {
-  //     document.getElementById('legend-confidence').style.display = 'block';
-  //   } else if (val === 'Custom') {
-  //     document.getElementById('legend-db').style.display = 'block';
-  //   }
-  //   Graph.linkColor(link => {
-  //     if (val === 'Confidence') {
-  //       return link.score ? confidenceColorScale(link.score) : 'gray';
-  //     } else {
-  //       return link.color ? link.color : 'gray';
-  //     }
-  //   });
-  // });
+  folder5.add(settings, 'EdgeColor', ['Confidence', 'Custom']).onChange(val => {
+    edgeColor = val;
+    document.querySelectorAll('.edge-legend').forEach(el => el.style.display = 'none');
+    // Show the selected legend
+    if (val === 'Confidence') {
+      document.getElementById('legend-confidence').style.display = 'block';
+    } else if (val === 'Custom') {
+      document.getElementById('legend-db').style.display = 'block';
+    }
+    Graph.linkColor(link => {
+      if (val === 'Confidence') {
+        return link.score ? confidenceColorScale(link.score) : 'gray';
+      } else {
+        return link.color ? link.color : 'gray';
+      }
+    });
+  });
   folder5.add(settings, 'Layout', ['Force-Directed', 'Spherical']).onChange(val => {
     if (layerController) {
       folder5.remove(layerController);
@@ -1157,6 +1219,14 @@
     document.getElementById("logo-images").style.paddingLeft = (window.innerWidth-460).toString()+"px";
     document.getElementById("title").style.width = window.innerWidth.toString()+"px";
   });
+
+  // initial scan of taxon Ids
+  uniqueTaxonIds = new Set(Graph.graphData().links.map(link => link.ncbiTaxonId));
+  uniqueTaxonIds.forEach(id => {
+    activeSpecies[id] = true;
+    folder4.add(activeSpecies, id).onChange(updateLinks);
+  });
+  folder4.open();
 
 
 </script>
