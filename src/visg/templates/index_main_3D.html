@@ -14,6 +14,8 @@
 <!-- DataTables -->
 <link rel="stylesheet" href="https://cdn.datatables.net/1.10.21/css/jquery.dataTables.min.css">
 <script src="https://cdn.datatables.net/1.10.21/js/jquery.dataTables.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.3.2/css/fixedHeader.dataTables.min.css" />
+<script src="https://cdn.datatables.net/fixedheader/3.3.2/js/dataTables.fixedHeader.min.js"></script>
 
   <script src="{{ url_for('static', filename='js/d3.v7.js')}}"></script>
 
@@ -64,37 +66,26 @@
 
 <ul id="context-menu" class="list-group position-absolute shadow bg-dark text-white border border-secondary p-2 rounded" style="display: none; z-index: 1050;">
   <li class="list-item bg-dark text-white border-0" onclick="createProteinModal()">Show 3D structure</li>
-  <li class="list-item bg-dark text-white border-0" onclick="promptGraphLLM()">Ask LLM</li>
 </ul>
 
-<div id="protein-info-container" class="card bg-dark text-white position-fixed bottom-0 start-0 m-4 shadow" style="width: 20rem; height: auto; z-index: 1000;">
+<div id="protein-info-container" 
+    class="card bg-dark text-white position-fixed bottom-0 start-0 m-4 shadow" 
+    style="width: 22rem; 
+    height: auto; 
+    z-index: 1000;">
   <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
-    <span>Protein Info</span>
+    <span>Protein Graph Info</span>
     <button class="btn btn-sm btn-outline-light" onclick="toggleInfoBody()">—</button>
   </div>
 
   <div id="info-body">
-    <!-- Node/Link Table -->
-     <div class="card">
-      <div class="card-body p-2">
-        <table id="node-table" class="table table-sm">
-          <thead>
-            <tr>
-              <th>Protein ID</th>
-              <th>Total Links</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
     <!-- Interaction score distribution -->
     <div class="card bg-dark text-white shadow">
       <div class="card-header bg-secondary text-white">
         <span>Interaction Confidence Distribution</span>
       </div>
       <div class="card-body p-2">
-        <svg id="score-histogram" width="280" height="150"></svg>
+        <svg id="score-histogram" width="300" height="150"></svg>
       </div>
     </div>
       <!-- Protein Search -->
@@ -114,6 +105,25 @@
       <input type="text" id="chat-input" class="form-control me-2 bg-secondary text-white border-0" placeholder="Type a question...">
       <button class="btn btn-outline-light" onclick="sendChat()">Send</button>
     </div>
+
+    <!-- Node/Link Tables -->
+     <div id="table-tabs" style="margin-bottom: 8px;">
+        <button id="tab-nodes" class="active-tab">Nodes</button>
+        <button id="tab-links">Links</button>
+      </div>
+
+      <!-- Container for tables -->
+      <div id="table-container">
+        <table id="data-table" class="display data-table" style="width: 100%; display: table">
+          <thead>
+            <tr id="table-header-row">
+              <th>Protein IDs</th>
+              <th>Total Links</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
   </div>
 </div>
 
@@ -182,7 +192,6 @@
   let counter = 0;
   const highlightNodes = new Set(); 
   const highlightLinks = new Set();
-  const organisms = {human: 9606, mouse: 10090, yeast: 4932}
   let hoverNodes = new Set(); // selected (red) nodes
   let focusNode = null;
   let showLinkParticle = false;
@@ -197,13 +206,13 @@
   const timerV = 12000;
   const timerStep = 10800;
   var currTimerStep = timerStep;
+  var currTable = 'Nodes';
   var currLayout = 'Force-Directed';
   var numLayers = 4; // for concentric spherical layout
-  var edgeColor = 'Confidence';
-  var organism = '9606'; // human
+  var edgeColor = 'Confidence'; // default edge color
   var isMinimized = false;
   var activeLink = null;
-  var activeLinks = new Set(['red', 'orange', 'blue', 'green', 'gray']);
+  var activeLinks = new Set(['red', 'orange', 'blue', 'green', 'gray']); // for custom edge coloring
   var uniqueTaxonIds = new Set();
   var activeSpecies = {}; 
 
@@ -439,6 +448,30 @@
 
   }
 
+  function rebuildTable(columns) {
+    if ($.fn.DataTable.isDataTable('#data-table')) {
+      $('#data-table').DataTable().destroy();
+      $('#data-table tbody').empty();  
+    }
+
+    // building new header
+    const headerRow = $('#table-header-row');
+    headerRow.empty();
+    columns.forEach(col => {
+      headerRow.append(`<th>${col}</th>`);
+    });
+
+    // Initialize new DataTable
+    $('#data-table').DataTable({
+      paging: false,
+      searching: true,
+      lengthChange: false,
+      info: false,
+      scrollY: '180px',
+      scrollCollapse: true
+    });
+  }
+
 
   // update graph with new data
   function addGraphData(dataPart, reset = false){
@@ -501,7 +534,8 @@
 
     // Sijax.request("getProteinStats")
     setStats(nlen, llen);
-    populateNodeTable(newNodes);
+    if (currTable == 'Nodes') populateNodeTable(newNodes);
+    else if (currTable == 'Links') populateLinkTable(dataPart.links);
     drawConfidenceHistogram(result.links);
     
     // scanning new links for unique taxon Ids
@@ -787,41 +821,34 @@
   }
 
   function populateNodeTable(newNodes) {
-    if (!$.fn.DataTable.isDataTable('#node-table')) {
-      $('#node-table').DataTable({
-        paging: false,
-        searching: true,
-        order: [[1, 'desc']],
-        lengthChange: false,
-        info: false,
-        scrollY: '180px',
-        scrollCollapse: true
-      });
-
-      $('#node-table tbody').on('click', 'tr', function () {
-        const dataTable = $('#node-table').DataTable();
-        const rowData = dataTable.row(this).data();
-        if (rowData) {
-          const nodeId = rowData[0];
-          searchAndFocusNode(nodeId);  
-        }
-      });
-    }
-
-    const dataTable = $('#node-table').DataTable();
-
+    const dataTable = $('#data-table').DataTable();
     newNodes.forEach(node => {
       const existing = dataTable.rows().data().toArray().some(row => row[0] === node.id);
       if (!existing) {
         const inD = [...new Set(node.in_degree)].length;
         const outD = [...new Set(node.out_degree)].length;
         const totalLinks = inD + outD;
-        
         dataTable.row.add([node.id, totalLinks]);
       }
     });
+    $('#data-table tbody').on('click', 'tr', function () {
+      const rowData = dataTable.row(this).data();
+      if (rowData) {
+        const nodeId = rowData[0];
+        searchAndFocusNode(nodeId);  
+      }
+    });
+    dataTable.order([1, 'desc']).draw();
+  }
 
-    dataTable.draw();
+  function populateLinkTable(links) {
+    const dataTable = $('#data-table').DataTable();
+    const data = links.map(link => [
+      typeof link.source === 'object' ? link.source.id : link.source,
+      typeof link.target === 'object' ? link.target.id : link.target,
+      link.score
+    ]);
+    $('#data-table').DataTable().clear().rows.add(data).order([2, 'desc']).draw();
   }
 
   function drawConfidenceHistogram(links) {
@@ -1018,7 +1045,7 @@
     const node = Graph.graphData().nodes.find(n => n.id.toLowerCase() === query.toLowerCase());
 
     if (node) {
-      const distance = 100; // how far the camera should be from the node
+      const distance = 400; // how far the camera should be from the node
       const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
 
       Graph.cameraPosition(
@@ -1035,6 +1062,9 @@
       if (!node && !highlightNodes.size) return;
 
       if (node && !highlightNodes.has(node.id)) { // show link directions on hover
+
+        highlightNodes.clear();
+        highlightLinks.clear();
 
         highlightNodes.add(node.id);
         node.neighbors.forEach(neighbor => highlightNodes.add(neighbor));
@@ -1285,8 +1315,26 @@
   });
   folder4.open();
 
-  // initial load of node table
-  populateNodeTable(Graph.graphData().nodes);
+  // initial load of data tables
+  rebuildTable(["Protein IDs", "Total Links"]);
+  currTable = 'Nodes';
+
+  // tab switching
+  $('#tab-nodes').on('click', () => {
+    $('#tab-nodes').addClass('active-tab');
+    $('#tab-links').removeClass('active-tab');
+    currTable = 'Nodes';
+    rebuildTable(["Protein IDs", "Total Links"]);
+    populateNodeTable(Graph.graphData().nodes);
+  });
+
+  $('#tab-links').on('click', () => {
+    $('#tab-links').addClass('active-tab');
+    $('#tab-nodes').removeClass('active-tab');
+    currTable = 'Links';
+    rebuildTable(["Source", "Target", "Confidence Score"]);
+    populateLinkTable(Graph.graphData().links);
+  });
 
 </script>
 
