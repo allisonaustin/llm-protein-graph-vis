@@ -102,8 +102,8 @@
 
     <!-- Chat -->
     <div class="card-header bg-secondary text-white collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-chat">
-      <span>Llama 3.1</span>
-       <i class="chevron-icon bi bi-chevron-down"></i>
+      <span>Chatbot</span>
+       <i class="chevron-icon bi bi-chevron-right"></i>
     </div>
     <div id="collapse-chat" class="collapse">
       <div id="chat-history" class="card-body overflow-auto" style="height: 150px; font-size: 0.9rem;"></div>
@@ -126,7 +126,7 @@
 
         <!-- Container for tables -->
         <div id="table-container">
-          <table id="data-table" class="display data-table" style="width: 100%; display: table">
+          <table id="data-table" class="display data-table nowrap" style="width: 100%; display: table">
             <thead>
               <tr id="table-header-row">
                 <th>Protein IDs</th>
@@ -241,7 +241,13 @@
     header.addEventListener('click', () => {
       const isExpanded = target.classList.contains('show');
       target.classList.toggle('show');
-      chevron.style.transform = isExpanded ? 'rotate(-90deg)' : 'rotate(0deg)';
+      if (!isExpanded) {
+        chevron.classList.remove('bi-chevron-right');
+        chevron.classList.add('bi-chevron-down');
+      } else {
+        chevron.classList.remove('bi-chevron-down');
+        chevron.classList.add('bi-chevron-right');
+      }
     });
   });
 
@@ -493,6 +499,7 @@
       lengthChange: false,
       info: false,
       scrollY: '180px',
+      scrollX: true,
       scrollCollapse: true
     });
   }
@@ -869,16 +876,27 @@
   function populateLinkTable(links) {
     const dataTable = $('#data-table').DataTable();
 
+      $('#data-table tbody').on('click', 'tr', function () {
+        const rowData = dataTable.row(this).data();
+        if (rowData) {
+          const sourceId = rowData[0];
+          const targetId = rowData[1];
+          searchAndFocusLink(sourceId, targetId);
+        }
+      });
+
     const data = links.map(link => {
-    const source = typeof link.source === 'object' ? link.source.id : link.source;
-    const target = typeof link.target === 'object' ? link.target.id : link.target;
-    const confidence = link.score != null ? link.score : 0;
-    const color = confidenceColorScale(confidence);
+      const source = typeof link.source === 'object' ? link.source.id : link.source;
+      const target = typeof link.target === 'object' ? link.target.id : link.target;
+      const confidence = link.score != null ? link.score : 0;
+      const taxonId = link.ncbiTaxonId != null ? link.ncbiTaxonId : 'N/A';
+      const color = confidenceColorScale(confidence);
 
     return [
       source,
       target,
-      `<span style="color: ${color}; font-weight: bold;">${confidence.toFixed(3)}</span>`
+      `<span style="color: ${color}; font-weight: bold;">${confidence.toFixed(3)}</span>`,
+      taxonId
       ];
     });
 
@@ -892,6 +910,9 @@
     const width = +svg.attr("width");
     const height = +svg.attr("height");
     const margin = { top: 10, right: 10, bottom: 30, left: 30 };
+    const padding = 15;
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
 
     const scores = links.map(d => d.score).filter(d => d !== undefined);
 
@@ -899,7 +920,7 @@
 
     const x = d3.scaleLinear()
       .domain([0, 1])
-      .range([margin.left, width - margin.right]);
+      .range([margin.left + padding, width - margin.right]);
 
     const bins = d3.histogram()
       .domain(x.domain())
@@ -907,7 +928,7 @@
 
     const y = d3.scaleLinear()
       .domain([0, d3.max(bins, d => d.length)]).nice()
-      .range([height - margin.bottom, margin.top]);
+      .range([height - margin.bottom - padding, margin.top]);
 
     const bar = svg.append("g")
       .selectAll("rect")
@@ -931,12 +952,31 @@
         });
 
     svg.append("g")
-      .attr("transform", `translate(0,${height - margin.bottom})`)
+      .attr("transform", `translate(0,${height - margin.bottom - padding})`)
       .call(d3.axisBottom(x).ticks(5));
 
     svg.append("g")
-      .attr("transform", `translate(${margin.left},0)`)
+      .attr("transform", `translate(${margin.left + padding},0)`)
       .call(d3.axisLeft(y).ticks(5));
+
+    // X-axis label
+    svg.append("text")
+      .attr("text-anchor", "middle")
+      .attr("x", margin.left + innerWidth / 2)
+      .attr("y", height - 5)
+      .text("Confidence Score")
+      .style('font-size', '14px')
+      .style("fill", "white");
+
+    // Y-axis label
+    svg.append("text")
+      .attr("text-anchor", "middle")
+      .attr("transform", `rotate(-90)`)
+      .attr("x", -margin.top - innerHeight / 2)
+      .attr("y", 12)
+      .text("Frequency")
+      .style('font-size', '14px')
+      .style("fill", "white");
   }
 
   function updateConnectorLine(geneId, pdbId) {
@@ -1073,9 +1113,6 @@
   }
 
   function searchAndFocusNode(query) {
-    //const query = document.getElementById("protein-search").value.trim();
-    //if (!query) return;
-
     const node = Graph.graphData().nodes.find(n => n.id.toLowerCase() === query.toLowerCase());
 
     if (node) {
@@ -1119,6 +1156,40 @@
       updateHighlight();
     } else {
       alert("Protein not found in the graph.");
+    }
+  }
+
+  function searchAndFocusLink(sourceId, targetId) {
+    const link = Graph.graphData().links.find(l =>
+      (l.source.id || l.source) === sourceId &&
+      (l.target.id || l.target) === targetId
+    );
+
+    if (link) {
+      const node = typeof link.source === 'object' ? link.source : Graph.graphData().nodes.find(n => n.id === link.source);
+      const distance = 400;
+      const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
+
+      Graph.cameraPosition(
+        {
+          x: node.x * distRatio,
+          y: node.y * distRatio,
+          z: node.z * distRatio
+        },
+        node,
+        1000
+      );
+
+      highlightNodes.clear();
+      highlightLinks.clear();
+
+      highlightNodes.add(sourceId);
+      highlightNodes.add(targetId);
+      highlightLinks.add(link);
+
+      updateHighlight();
+    } else {
+      alert("Link not found in the graph.");
     }
   }
 
@@ -1366,7 +1437,7 @@
     $('#tab-links').addClass('active-tab');
     $('#tab-nodes').removeClass('active-tab');
     currTable = 'Links';
-    rebuildTable(["Source", "Target", "Confidence Score"]);
+    rebuildTable(["Source", "Target", "Conf. Score", "ncbiTaxonId"]);
     populateLinkTable(Graph.graphData().links);
   });
 

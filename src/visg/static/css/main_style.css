@@ -49,6 +49,10 @@ div.dg.ac{
     z-index: 2 !important;
 }
 
+#protein-info-container {
+  font-family: 'Lucida Grande', sans-serif;
+}
+
 .header {
   height: 20px;
   background: #222;
@@ -126,6 +130,7 @@ div.dg.ac{
   padding: 4px 8px;  
   background-color: #f8f9fa;
   color: black;
+  white-space: nowrap;
 }
 
 #data-table_filter input {
