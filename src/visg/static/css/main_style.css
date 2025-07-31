@@ -151,3 +151,26 @@ div.dg.ac{
   background-color: #f8f9fa;
   color: black;
 }
+
+.collapse-body {
+  max-height: 1000px;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.collapse-body.collapsed {
+  max-height: 0;
+  overflow: hidden;
+}
+
+.card-header.collapsible {
+  cursor: pointer;
+}
+
+.chevron-icon {
+  transition: transform 0.3s ease;
+}
+
+.card-header.collapsed .chevron-icon {
+  transform: rotate(-90deg);
+}
