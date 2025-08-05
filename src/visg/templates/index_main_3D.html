@@ -84,11 +84,12 @@
     <div class="card bg-dark text-white shadow">
       <div class="card-header bg-secondary text-white collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-hist">
         <span>Interaction Confidence Distribution</span>
-         <i class="chevron-icon bi bi-chevron-down"></i>
+         <i class="chevron-icon bi bi-chevron-right"></i>
       </div>
-      <div id="collapse-hist" class="collapse show">
+      <div id="collapse-hist" class="collapse">
         <div class="card-body p-2">
-          <svg id="score-histogram" width="300" height="150"></svg>
+          <svg id="score-histogram" width="300" height="130"></svg>
+           <svg id="radar-chart" width="280" height="150"></svg>
         </div>
       </div>
     </div>
@@ -106,7 +107,7 @@
        <i class="chevron-icon bi bi-chevron-right"></i>
     </div>
     <div id="collapse-chat" class="collapse">
-      <div id="chat-history" class="card-body overflow-auto" style="height: 150px; font-size: 0.9rem;"></div>
+      <div id="chat-history" class="card-body overflow-auto" style="height: 120px; font-size: 0.9rem;"></div>
       <div class="card-footer d-flex p-2 bg-dark">
         <input type="text" id="chat-input" class="form-control me-2 bg-secondary text-white border-0" placeholder="Type a question...">
         <button class="btn btn-outline-light" onclick="sendChat()">Send</button>
@@ -226,8 +227,8 @@
   var isMinimized = false;
   var activeLink = null;
   var activeLinks = new Set(['red', 'orange', 'blue', 'green', 'gray']); // for custom edge coloring
-  var uniqueTaxonIds = new Set();
-  var activeSpecies = {}; 
+  var uniqueTaxonIds = new Set(); // GUI species list
+  var activeSpecies = {}; // GUI toggle states
 
   const confidenceColorScale = d3.scaleLinear()
     .domain([0, 1.0])  
@@ -569,11 +570,12 @@
     if (currTable == 'Nodes') populateNodeTable(newNodes);
     else if (currTable == 'Links') populateLinkTable(dataPart.links);
     drawConfidenceHistogram(result.links);
+    drawRadarChart(result.links);
     
     // scanning new links for unique taxon Ids
     var newIds = []
     dataPart.links.forEach(link => {
-      const taxonId = link.ncbiTaxonId;
+      const taxonId = String(link.ncbiTaxonId);
       if (!uniqueTaxonIds.has(taxonId)) {
         uniqueTaxonIds.add(taxonId);
         newIds.push(taxonId);
@@ -914,7 +916,11 @@
     const innerWidth = width - margin.left - margin.right;
     const innerHeight = height - margin.top - margin.bottom;
 
-    const scores = links.map(d => d.score).filter(d => d !== undefined);
+    const scores = links.filter(d => 
+      d !== undefined && 
+      d.ncbiTaxonId !== 'N/A' && // proteins have a shared organism
+      d.score !== 0.0 // direct interaction exists
+    ).map(d => d.score);
 
     const tooltip = d3.select("#tooltip");
 
@@ -965,7 +971,7 @@
       .attr("x", margin.left + innerWidth / 2)
       .attr("y", height - 5)
       .text("Confidence Score")
-      .style('font-size', '14px')
+      .style('font-size', '12px')
       .style("fill", "white");
 
     // Y-axis label
@@ -975,9 +981,124 @@
       .attr("x", -margin.top - innerHeight / 2)
       .attr("y", 12)
       .text("Frequency")
-      .style('font-size', '14px')
+      .style('font-size', '12px')
       .style("fill", "white");
   }
+
+  function drawRadarChart(links) {
+    const svg = d3.select("#radar-chart");
+    svg.selectAll("*").remove(); // clear previous chart
+
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+    const margin = { top: 10, right: 10, bottom: 30, left: 30 };
+    const radius = 60;
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    const tooltip = d3.select("body")
+      .append("div")
+      .attr("class", "tooltip")
+      .style("position", "absolute")
+      .style("background", "rgba(0, 0, 0, 0.7)")
+      .style("color", "white")
+      .style("padding", "4px 8px")
+      .style("border-radius", "4px")
+      .style("font-size", "12px")
+      .style("pointer-events", "none")
+      .style("opacity", 0);
+
+    const scoreFields = ['nscore', 'fscore', 'pscore', 'ascore', 'escore', 'dscore', 'tscore'];
+    const axisInfo = {
+      nscore: 'Neighborhood',
+      fscore: 'Fusion',
+      pscore: 'Phylogenetic similarity',
+      ascore: 'Association (co-expression, co-occurence)',
+      escore: 'Experiments',
+      dscore: 'Databases',
+      tscore: 'Text mining'
+    };
+
+    const angleSlice = (2 * Math.PI) / scoreFields.length;
+    const scale = d3.scaleLinear().domain([0, 1]).range([0, radius]);
+
+    // Filter valid scores
+    const validLinks = links.filter(d =>
+      d &&
+      d.ncbiTaxonId !== 'N/A' &&
+      d.score !== 0 &&
+      scoreFields.some(f => d[f] !== undefined)
+    );
+
+    if (validLinks.length === 0) return;
+
+    // Compute average for each field
+    const averages = scoreFields.map(field => {
+      const values = validLinks.map(d => +d[field] || 0).filter(v => v > 0);
+      const sum = values.reduce((a, b) => a + b, 0);
+      const avg = values.length ? sum / values.length : 0;
+      return { axis: field, value: avg };
+    });
+
+    // Draw axes
+    scoreFields.forEach((field, i) => {
+      const angle = i * angleSlice - Math.PI / 2;
+      const x = centerX + radius * Math.cos(angle);
+      const y = centerY + radius * Math.sin(angle);
+
+      const labelX = centerX + (radius * 1.12) * Math.cos(angle);
+      const labelY = centerY + (radius * 1.12) * Math.sin(angle);
+
+      svg.append("line")
+        .attr("x1", centerX)
+        .attr("y1", centerY)
+        .attr("x2", x)
+        .attr("y2", y)
+        .attr("stroke", "gray");
+
+      svg.append("text")
+        .attr("x", labelX)
+        .attr("y", labelY)
+        .attr("dy", "0.35em")
+        .attr("text-anchor", "middle")
+        .attr("fill", "white")
+        .style("font-size", "10px")
+        .attr('cursor', 'pointer')
+        .text(field)
+        .style("text-anchor", "middle")
+        .style("alignment-baseline", "middle")
+        .on("mouseover", function (event) {
+          tooltip
+            .style("opacity", 1)
+            .html(`${axisInfo[field]}`);
+        })
+        .on("mousemove", function (event) {
+          tooltip
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY - 10) + "px");
+        })
+        .on("mouseout", function () {
+          tooltip.style("opacity", 0);
+        });
+    });
+
+    // Create radar line
+    const line = d3.lineRadial()
+      .radius(d => scale(d.value))
+      .angle((d, i) => i * angleSlice)
+      .curve(d3.curveLinearClosed);
+
+    svg.append("path")
+      .datum(averages)
+      .attr("fill", "rgba(110, 168, 254, 0.3)")
+      .attr("stroke", "#6ea8fe")
+      .attr("stroke-width", 2)
+      .attr("transform", `translate(${centerX},${centerY})`)
+      .attr("d", line);
+
+
+  }
+
 
   function updateConnectorLine(geneId, pdbId) {
     const node = Graph.graphData().nodes.find(n => n.id === geneId);
@@ -1001,7 +1122,7 @@
     }
   }
 
-  // chatting with ollama locally
+
   async function sendChat() {
     const inputElem = document.getElementById('chat-input');
     const userInput = inputElem.value.trim();
@@ -1134,8 +1255,8 @@
 
       if (node && !highlightNodes.has(node.id)) { // show link directions on hover
 
-        // highlightNodes.clear();
-        // highlightLinks.clear();
+        highlightNodes.clear();
+        highlightLinks.clear();
 
         highlightNodes.add(node.id);
         node.neighbors.forEach(neighbor => highlightNodes.add(neighbor));
@@ -1180,12 +1301,27 @@
         1000
       );
 
-      highlightNodes.clear();
-      highlightLinks.clear();
+      if (!link && !highlightLinks.size) return;
 
-      highlightNodes.add(sourceId);
-      highlightNodes.add(targetId);
-      highlightLinks.add(link);
+      if (link && !highlightLinks.has(link)) { 
+
+        highlightNodes.clear();
+        highlightLinks.clear();
+
+        highlightNodes.add(sourceId);
+        highlightNodes.add(targetId);
+        highlightLinks.add(link);
+
+      }else{ // clear link directions
+        highlightLinks.delete(link);
+      }
+
+      // highlightNodes.clear();
+      // highlightLinks.clear();
+
+      // highlightNodes.add(sourceId);
+      // highlightNodes.add(targetId);
+      // highlightLinks.add(link);
 
       updateHighlight();
     } else {
@@ -1315,6 +1451,14 @@
   function startDataLoad(){
     resetGraph();
 
+    // reset chart svgs and table
+    d3.select("#score-histogram").selectAll("*").remove();
+    d3.select("#radar-chart").selectAll("*").remove();
+    if ($.fn.DataTable.isDataTable('#data-table')) {
+      $('#data-table').DataTable().destroy();
+      $('#data-table tbody').empty();  
+    }
+
     // updateLinkCount(minLimit, maxLimit);
     reloadGraphData()
     settings.MinLinks = minLimit;
@@ -1413,10 +1557,16 @@
   });
 
   // initial scan of taxon Ids
-  uniqueTaxonIds = new Set(Graph.graphData().links.map(link => link.ncbiTaxonId));
-  uniqueTaxonIds.forEach(id => {
-    activeSpecies[id] = true;
-    folder4.add(activeSpecies, id).onChange(updateLinks);
+  Graph.graphData().links.forEach(link => {
+    const id = String(link.ncbiTaxonId);
+    if (!uniqueTaxonIds.has(id)) {
+      uniqueTaxonIds.add(id);
+      activeSpecies[id] = true;
+
+      if (!existingControllers.has(id)) {
+        folder4.add(activeSpecies, id).onChange(updateLinks);
+      }
+    }
   });
   folder4.open();
 
@@ -1437,7 +1587,7 @@
     $('#tab-links').addClass('active-tab');
     $('#tab-nodes').removeClass('active-tab');
     currTable = 'Links';
-    rebuildTable(["Source", "Target", "Conf. Score", "ncbiTaxonId"]);
+    rebuildTable(["Source", "Target", "Conf", "ncbiTaxonId"]);
     populateLinkTable(Graph.graphData().links);
   });
 
