@@ -80,13 +80,13 @@
     <!-- Interaction score distribution -->
     <div class="card bg-dark text-white shadow">
       <div class="card-header bg-secondary text-white collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-hist">
-        <span>Interaction Confidence Distribution</span>
+        <span>Edge Confidence</span>
          <i class="chevron-icon bi bi-chevron-right"></i>
       </div>
       <div id="collapse-hist" class="collapse">
         <div class="card-body p-2">
-          <svg id="score-histogram" width="300" height="130"></svg>
-           <svg id="radar-chart" width="280" height="150"></svg>
+          <svg id="score-histogram" width="300" height="120"></svg>
+           <svg id="radar-chart" width="280" height="160"></svg>
         </div>
       </div>
     </div>
@@ -881,6 +881,20 @@
           const sourceId = rowData[0];
           const targetId = rowData[1];
           searchAndFocusLink(sourceId, targetId);
+          const graphLinks = Graph.graphData().links;
+          // searching for link in graph data
+          const matchedLink = graphLinks.find(link => {
+            const src = typeof link.source === 'object' ? link.source.id : link.source;
+            const tgt = typeof link.target === 'object' ? link.target.id : link.target;
+            return (src === sourceId && tgt === targetId) || (src === targetId && tgt === sourceId);
+          });
+          if (matchedLink) {
+            plotSelectedLink(matchedLink);
+            updateRadarLegend({ 
+              name: `${matchedLink.source.id + " → " + matchedLink.target.id}`, 
+              color: confidenceColorScale(matchedLink.score)
+            });
+          }
         }
       });
 
@@ -986,12 +1000,36 @@
     const svg = d3.select("#radar-chart");
     svg.selectAll("*").remove(); // clear previous chart
 
+    const legendGroup = svg.select("g.legend");
+    if (legendGroup.empty()) {
+      svg.append("g").attr("class", "legend").attr("transform", `translate(10, 20)`);
+    }
+    const legend = d3.select("#radar-chart g.legend");
+    legend.selectAll("*").remove();
+
+    legend.append("line")
+      .attr("x1", 0)
+      .attr("y1", 0)
+      .attr("x2", 15)
+      .attr("y2", 0)
+      .attr("stroke", "#6ea8fe")
+      .attr("stroke-width", 3);
+
+    legend.append("text")
+      .attr("x", 20)
+      .attr("y", 10)
+      .attr("fill", "white")
+      .style("font-size", "12px")
+      .text("Average");
+
     const width = +svg.attr("width");
     const height = +svg.attr("height");
     const margin = { top: 10, right: 10, bottom: 30, left: 30 };
     const radius = 60;
-    const centerX = width / 2;
-    const centerY = height / 2;
+    const paddingX = 30;
+    const paddingY = 10;
+    const centerX = width / 2 + paddingX;
+    const centerY = height / 2 + paddingY;
 
     const tooltip = d3.select("body")
       .append("div")
@@ -1079,7 +1117,6 @@
         });
     });
 
-    // Create radar line
     const line = d3.lineRadial()
       .radius(d => scale(d.value))
       .angle((d, i) => i * angleSlice)
@@ -1092,8 +1129,29 @@
       .attr("stroke-width", 2)
       .attr("transform", `translate(${centerX},${centerY})`)
       .attr("d", line);
+  }
 
+  function updateRadarLegend(label) {
+    const legend = d3.select("#radar-chart g.legend");
+    // legend.selectAll("*").remove();
+    legend.selectAll('.selected').remove();
+    
+    legend.append("line")
+      .attr('class', 'selected')
+      .attr("x1", 0)
+      .attr("y1", 10)
+      .attr("x2", 15)
+      .attr("y2", 10)
+      .attr("stroke", label.color)
+      .attr("stroke-width", 3);
 
+    legend.append("text")
+      .attr('class', 'selected')
+      .attr("x", 20)
+      .attr("y", 15)
+      .attr("fill", "white")
+      .style("font-size", "12px")
+      .text(label.name);
   }
 
 
@@ -1301,34 +1359,73 @@
         1000
       );
 
-      if (!link && !highlightLinks.size) return;
+      // if (!link && !highlightLinks.size) return;
 
-      if (link && !highlightLinks.has(link)) { 
+      // if (link && !highlightLinks.has(link)) { 
 
-        highlightNodes.clear();
-        highlightLinks.clear();
+      //   highlightNodes.clear();
+      //   highlightLinks.clear();
 
-        highlightNodes.add(sourceId);
-        highlightNodes.add(targetId);
-        highlightLinks.add(link);
+      //   highlightNodes.add(sourceId);
+      //   highlightNodes.add(targetId);
+      //   highlightLinks.add(link);
 
-      }else{ // clear link directions
-        highlightNodes.delete(sourceId);
-        highlightNodes.delete(targetId);
-        highlightLinks.delete(link);
-      }
+      // }else{ // clear link directions
+      //   highlightNodes.delete(sourceId);
+      //   highlightNodes.delete(targetId);
+      //   highlightLinks.delete(link);
+      // }
 
-      // highlightNodes.clear();
-      // highlightLinks.clear();
+      highlightNodes.clear();
+      highlightLinks.clear();
 
-      // highlightNodes.add(sourceId);
-      // highlightNodes.add(targetId);
-      // highlightLinks.add(link);
+      highlightNodes.add(sourceId);
+      highlightNodes.add(targetId);
+      highlightLinks.add(link);
 
       updateHighlight();
     } else {
       alert("Link not found in the graph.");
     }
+  }
+
+  function plotSelectedLink(selectedLink) {
+    const svg = d3.select("#radar-chart");
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+    const radius = 60;
+    const paddingX = 30;
+    const paddingY = 10;
+    const centerX = width / 2 + paddingX;
+    const centerY = height / 2 + paddingY;
+
+    const scoreFields = ['nscore', 'fscore', 'pscore', 'ascore', 'escore', 'dscore', 'tscore'];
+    const angleSlice = (2 * Math.PI) / scoreFields.length;
+    const scale = d3.scaleLinear().domain([0, 1]).range([0, radius]);
+    const linkColor = confidenceColorScale(selectedLink.score);
+
+    svg.selectAll(".selected-link-line").remove();
+
+    const points = scoreFields.map((field, i) => ({
+      axis: field,
+      value: selectedLink[field] || 0,
+      angle: i * angleSlice
+    }));
+
+    const line = d3.lineRadial()
+      .radius(d => scale(d.value))
+      .angle(d => d.angle)
+      .curve(d3.curveLinearClosed);
+
+    svg.append("path")
+      .datum(points)
+      .attr("class", "selected-link-line")
+      .attr("fill", linkColor)
+      .attr("fill-opacity", 0.2)
+      .attr("stroke", linkColor)
+      .attr("stroke-width", 2)
+      .attr("transform", `translate(${centerX},${centerY})`)
+      .attr("d", line);
   }
 
   //Zoom to Fit
@@ -1456,6 +1553,7 @@
     // reset chart svgs and table
     d3.select("#score-histogram").selectAll("*").remove();
     d3.select("#radar-chart").selectAll("*").remove();
+    d3.select("#radar-chart").selectAll(".selected-link-line").remove();
     if ($.fn.DataTable.isDataTable('#data-table')) {
       $('#data-table').DataTable().destroy();
       $('#data-table tbody').empty();  
