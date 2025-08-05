@@ -1216,15 +1216,18 @@
   }
 
   function toggleInfoBody() {
+    const container = document.getElementById('protein-info-container');
     const body = document.getElementById('info-body');
     const btn = event.target;
 
     if (isMinimized) {
       body.style.display = 'block';
+      container.style.height = '80vh'; 
       btn.textContent = '—';
     } else {
       body.style.display = 'none';
-      btn.textContent = '+'; 
+      container.style.height = '4rem'; 
+      btn.textContent = '+';
     }
 
     isMinimized = !isMinimized;
