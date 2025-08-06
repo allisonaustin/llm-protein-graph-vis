@@ -226,6 +226,9 @@
   var activeLinks = new Set(['red', 'orange', 'blue', 'green', 'gray']); // for custom edge coloring
   var uniqueTaxonIds = new Set(); // GUI species list
   var activeSpecies = {}; // GUI toggle states
+  var existingControllers = {};
+  const taxonCounts = {};
+  let totalLinks = 0;
 
   const confidenceColorScale = d3.scaleLinear()
     .domain([0, 1.0])  
@@ -567,18 +570,26 @@
     drawRadarChart(result.links);
     
     // scanning new links for unique taxon Ids
-    var newIds = []
     dataPart.links.forEach(link => {
-      const taxonId = String(link.ncbiTaxonId);
-      if (!uniqueTaxonIds.has(taxonId)) {
-        uniqueTaxonIds.add(taxonId);
-        newIds.push(taxonId);
+      const id = String(link.ncbiTaxonId);
+      taxonCounts[id] = (taxonCounts[id] || 0) + 1;
+      totalLinks++;
+      if (!uniqueTaxonIds.has(id)) {
+        uniqueTaxonIds.add(id);
+        activeSpecies[id] = true;
       }
     });
-    newIds.forEach(id => {
-      activeSpecies[id] = true;
-      folder4.add(activeSpecies, id).onChange(updateLinks);
+    uniqueTaxonIds.forEach(taxonId => {
+      const percent = ((taxonCounts[taxonId] / totalLinks) * 100).toFixed(1);
+      const label = `${taxonId} (${percent}%)`;
+      
+     if (existingControllers.hasOwnProperty(taxonId)) {
+        folder4.remove(existingControllers[taxonId]);
+      }
+      const controller = folder4.add(activeSpecies, taxonId).name(label).onChange(updateLinks);
+      existingControllers[taxonId] = controller;
     });
+    folder4.domElement.style.width = '350px';
     folder4.open();
 
     Graph.graphData(result);
@@ -866,7 +877,7 @@
         searchAndFocusNode(nodeId);  
       }
     });
-    // dataTable.order([1, 'desc']).draw();
+    dataTable.draw();
   }
 
   function populateLinkTable(links) {
@@ -1136,7 +1147,7 @@
     legend.append("line")
       .attr('class', 'selected')
       .attr("x1", 0)
-      .attr("y1", 10)
+      .attr("y1", 15)
       .attr("x2", 15)
       .attr("y2", 15)
       .attr("stroke", label.color)
@@ -1665,20 +1676,6 @@
     document.getElementById("logo-images").style.paddingLeft = (window.innerWidth-460).toString()+"px";
     document.getElementById("title").style.width = window.innerWidth.toString()+"px";
   });
-
-  // initial scan of taxon Ids
-  Graph.graphData().links.forEach(link => {
-    const id = String(link.ncbiTaxonId);
-    if (!uniqueTaxonIds.has(id)) {
-      uniqueTaxonIds.add(id);
-      activeSpecies[id] = true;
-
-      if (!existingControllers.has(id)) {
-        folder4.add(activeSpecies, id).onChange(updateLinks);
-      }
-    }
-  });
-  folder4.open();
 
   // initial load of data tables
   rebuildTable(["Protein IDs", "Total Links"]);
