@@ -1,4 +1,4 @@
-from visg import data_path, master_file, data_part_width, master_filename
+from visg import data_path, master_file, data_part_width, master_filename, SPECIES, UDF_RESULT
 
 import re
 import os
@@ -12,6 +12,9 @@ from networkx.readwrite import json_graph
 from joblib import Parallel, delayed
 from operator import itemgetter
 from copy import deepcopy
+from flask import jsonify
+import requests
+from collections import defaultdict
 
 class Protein_Graph:
     """ Class for reading and updating protein to protein interactions in a graph format.
@@ -30,7 +33,6 @@ class Protein_Graph:
     maxlink_count = 3000000
     processed_line_counts = 1
     processed_links = []
-
 
     def __init__(self):
         self.A = None
@@ -75,9 +77,154 @@ class Protein_Graph:
 #         self.G.remove_nodes_from(remove)
 
     @staticmethod
+    def get_string_ids(proteins, species):
+        """
+        Batch fetch STRING IDs for a list of proteins and a given species.
+        Returns a dict mapping input proteins to their STRING IDs.
+        """
+        url = f"https://string-db.org/api/json/get_string_ids"
+        params = {
+            "identifiers": "\r".join(proteins),
+            "species": species
+        }
+        id_map = {}
+        try:
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            data = response.json()
+            for entry in data:
+                input_prot = entry.get("queryItem")
+                ncbi_id = entry.get("ncbiTaxonId")
+                id_map[input_prot] = ncbi_id
+        except Exception as e:
+            print(f"Batch STRING ID lookup failed: {e}")
+        return id_map
+
+    @staticmethod
+    def fetch_interactions(protein_pairs, species):
+        """
+        Fetch interactions for a batch of protein pairs.
+        Returns a dict with (source, target) tuples as keys and score data as values.
+        """
+        identifiers = set([p for pair in protein_pairs for p in pair])
+        url = "https://string-db.org/api/json/network"
+        params = {
+            "identifiers": "\r".join(identifiers),
+            "species": species
+        }        
+        interaction_map = defaultdict(lambda: deepcopy(UDF_RESULT))
+        try:
+            r = requests.get(url, params=params)
+            r.raise_for_status()
+            data = r.json()
+            for edge in data:
+                source = edge.get("preferredName_A")
+                target = edge.get("preferredName_B")
+                if source and target:
+                    score_types = ['ncbiTaxonId', 'score', 'nscore', 'fscore', 'pscore', 'ascore', 'escore', 'dscore', 'tscore']
+                    scores = {field: edge.get(field, 0.0) for field in score_types}
+                    interaction_map[(source, target)] = scores
+        except Exception as e:
+            print(f"Batch interaction fetch failed: {e}")
+        
+        return interaction_map
+
+    @staticmethod
     def wc_l(directory_path, filename):
         line_count = sum(1 for _ in open(os.path.join(directory_path, filename)))
         return line_count
+    
+    @staticmethod
+    def get_graph_(minlink_count=0, maxlink_count=3000000, master_file_name=master_filename):
+        pgraph = Protein_Graph()
+        Protein_Graph.minlink_count = minlink_count
+        Protein_Graph.maxlink_count = maxlink_count
+
+        # cleaning DOT file
+        clean_master_file_name = pgraph.clean_dot_file(master_file_name)
+        pgraph.read_graph_from_file(clean_master_file_name)
+
+        dict_json_ = json_graph.node_link_data(pgraph.G)
+
+        def process_graph_chunk(start, step, graph_dict):
+            nodes = deepcopy(graph_dict["nodes"][start:start + step])
+            node_ids = {n["id"] for n in nodes}
+
+            all_proteins = set()
+            all_pairs = []
+
+            # link enrichment
+            for link in graph_dict["links"]:
+                src = str(link["source"])
+                tgt = str(link["target"])
+                all_proteins.add(src)
+                all_proteins.add(tgt)
+                all_pairs.append((src, tgt))
+
+            species_map = {}  # (protein, species) -> string_id
+            for species in SPECIES:
+                id_map = Protein_Graph.get_string_ids(list(all_proteins), species) 
+                for prot, sid in id_map.items():
+                    species_map[(prot, species)] = sid
+
+            all_links = []
+            for species in SPECIES:
+                resolved_pairs = []
+                for src, tgt in all_pairs:
+                    src_id = species_map.get((src, species))
+                    tgt_id = species_map.get((tgt, species))
+                    if src_id and tgt_id and src_id == tgt_id:
+                        resolved_pairs.append((src, tgt))
+                
+                interactions = Protein_Graph.fetch_interactions_batch(resolved_pairs, species)
+                for (src, tgt), score_entry in interactions.items():
+                    link_data = {
+                        "source": src,
+                        "target": tgt,
+                        "species": species,
+                        **score_entry
+                    }
+                    all_links.append(link_data)
+
+            links = all_links
+
+            # processing nodes
+            for n in nodes:
+                n_id = n["id"]
+                # neighbors filtered to those in the current chunk
+                n["neighbors"] = list(set([nei for nei in list(nx.all_neighbors(pgraph.G, n_id)) if nei in node_ids]))
+                
+                # in_degree and out_degree as lists of node IDs connected to node_id
+                n["in_degree"] = [src for src, tgt in pgraph.G.in_edges(n_id)]
+                n["out_degree"] = [tgt for src, tgt in pgraph.G.out_edges(n_id)]
+                
+                n["links"] = []
+                n['node_neighbor_count'] = 0
+
+                # Add links info from in_edges
+                for s, t in pgraph.G.in_edges(n_id):
+                    if s in node_ids and t in node_ids:
+                        n_in = [0] if s == n_id else [s1 for s1 in nx.all_neighbors(pgraph.G, s) if s1 != n_id and s1 in node_ids]
+                        n_out = [0] if t == n_id else [t1 for t1 in nx.all_neighbors(pgraph.G, t) if t1 != n_id and t1 in node_ids]
+                        n['node_neighbor_count'] += len(set(n_in + n_out))
+
+                # Add links info from out_edges
+                for s, t in pgraph.G.out_edges(n_id):
+                    if s in node_ids and t in node_ids:
+                        n_in = [0] if s == n_id else [s1 for s1 in nx.all_neighbors(pgraph.G, s) if s1 != n_id and s1 in node_ids]
+                        n_out = [0] if t == n_id else [t1 for t1 in nx.all_neighbors(pgraph.G, t) if t1 != n_id and t1 in node_ids]
+                        n['node_neighbor_count'] += len(set(n_in + n_out))
+
+            return {"nodes": nodes, "links": links}
+    
+        step = Protein_Graph.data_part_width
+        partitions = Parallel(n_jobs=10, backend="threading")(
+            delayed(process_graph_chunk)(i, step, dict_json_)
+            for i in range(0, len(dict_json_["nodes"]), step)
+        )
+
+        pgraph.partitions = partitions
+        return partitions
 
     # format graph and save in json files
     @staticmethod

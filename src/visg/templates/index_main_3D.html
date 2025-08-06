@@ -147,7 +147,7 @@
       <span>High (1.0)</span>
     </div>
   </div>
-  <div id="legend-db" class='edge-legend' style="position: fixed; display:none; z-index: 10; right: 700px; bottom: 35px;">
+  <div id="legend-db" class='edge-legend' style="position: fixed; display:none; z-index: 10; right: 40px; bottom: 35px;">
     <strong>Custom Edges</strong>
     <div style="margin-top: 5px;">
       <div style="cursor: pointer;" class="legend-item selected" data-color="red">
@@ -365,6 +365,11 @@
               highlightNodes.add(link.target.id);
             }
 
+            plotSelectedLink(link);
+            updateRadarLegend({ 
+              name: `${link.source.id + " → " + link.target.id}`, 
+              color: confidenceColorScale(link.score)
+            });
             updateHighlight();
           });
 
@@ -426,38 +431,30 @@
 
   // module for timed calls for graph updates
 
-  function reloadGraphData( reset = false, stopAt = counterStopAt ){
-
+  function reloadGraphData(reset = false, stopAt = counterStopAt) {
     counter = 0;
     counterStopAt = +stopAt;
-    console.log("stop at", +stopAt, "counter",counter, "counterStopAt",counterStopAt)
+    // console.log("stop at", +stopAt, "counter",counter, "counterStopAt",counterStopAt)
 
-     myInterval = setInterval(() => {
-      console.log("counter running", counter,  counterStopAt, counter < counterStopAt)
-      if(!pauseAnimation && counter < counterStopAt){
-        console.log("counter", counter, counterStopAt)
+    myInterval = setInterval(() => {
+      if (!pauseAnimation) {
+        if (counter < counterStopAt) {
+          Sijax.request('getDataPartions', [counter.toString(), reset.toString()]);
+          if (reset) reset = false;
+          counter++;
 
-        Sijax.request('getDataPartions', [counter.toString(), reset.toString()]);
+          const nodesCount = Graph.graphData()?.nodes?.length || 0;  // safer check
+          let fitAfter = (nodesCount > 500) ? 2 : 1;
 
-        if(reset) reset = false;
-        counter+=1;
-
-        if(Graph.graphData() && Graph.graphData().nodes && Graph.graphData().nodes > 500)
-          fitAfter = 2
-        else
-          fitAfter = 1
-
-        console.log("fitAfter",fitAfter)
-        if(counter % fitAfter === 0)
-          zoomToFit();
-
+          if (counter % fitAfter === 0) {
+            zoomToFit();
+          }
+        } else {
+          // Optionally clear interval when done
+          clearInterval(myInterval);
+        }
       }
-
-      // Sijax.request("checkGraphUpdates")
     }, timerV);
-
-
-
   }
 
   function stopFunction() {
@@ -869,7 +866,7 @@
         searchAndFocusNode(nodeId);  
       }
     });
-    dataTable.order([1, 'desc']).draw();
+    // dataTable.order([1, 'desc']).draw();
   }
 
   function populateLinkTable(links) {
@@ -913,7 +910,7 @@
       ];
     });
 
-    dataTable.clear().rows.add(data).order([2, 'desc']).draw();
+    dataTable.rows.add(data).draw();
   }
 
   function drawConfidenceHistogram(links) {
@@ -1017,7 +1014,7 @@
 
     legend.append("text")
       .attr("x", 20)
-      .attr("y", 10)
+      .attr("y", 5)
       .attr("fill", "white")
       .style("font-size", "12px")
       .text("Average");
@@ -1141,7 +1138,7 @@
       .attr("x1", 0)
       .attr("y1", 10)
       .attr("x2", 15)
-      .attr("y2", 10)
+      .attr("y2", 15)
       .attr("stroke", label.color)
       .attr("stroke-width", 3);
 
@@ -1318,16 +1315,24 @@
 
         highlightNodes.add(node.id);
         node.neighbors.forEach(neighbor => highlightNodes.add(neighbor));
-        node.links.forEach(link => highlightLinks.add(link));
+        // node.links.forEach(link => highlightLinks.add(link));
+        const matchingLinks = Graph.graphData().links.filter(l =>
+          (l.source.id || l.source) === node.id ||
+          (l.target.id || l.target) === node.id
+        );
+        matchingLinks.forEach(link => highlightLinks.add(link));
 
       }else{ // clear link directions
         highlightNodes.delete(node.id);
         node.neighbors.forEach(neighbor => highlightNodes.delete(neighbor));
-        node.links.forEach(link => highlightLinks.delete(link));
+        // node.links.forEach(link => highlightLinks.delete(link));
+        const matchingLinks = Graph.graphData().links.filter(l =>
+          (l.source.id || l.source) === node.id ||
+          (l.target.id || l.target) === node.id
+        );
+        matchingLinks.forEach(link => highlightLinks.delete(link));
         updateHighlight();
-        closeProteinModal(node.id);
         return;
-
       }
       if (node) {
         hoverNodes.add(node.id);
@@ -1452,6 +1457,11 @@
   // pause or resume data partitions load from backend
   const pauseResumeDataLoad = () => {
     pauseAnimation = !pauseAnimation;
+    if (pauseAnimation) {
+      console.log('pausing data load...')
+    } else {
+      console.log('resuming data load...')
+    }
   }
 
   // update the node distance - disabled for large disconnected graph

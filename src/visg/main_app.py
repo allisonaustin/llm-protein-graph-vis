@@ -74,11 +74,22 @@ def read_from_dot(dot_file):
     A = AGraph(string=open(dot_file).read())
     G = nx.DiGraph(A)
     dict_json_ = json_graph.node_link_data(G)
+    return dict_json_
 
 def get_graph_partions(obj_response, filename, reset):
     f = open(os.path.join(data_path,"graph_master_part"+str(data_part_width)+"_"+str(int(filename)+1)+".json"))
     data_partition = json.load(f)
     obj_response.script("addGraphData("+str(data_partition)+","+reset+")")
+
+def get_graph_partition(obj_response, filename, reset):
+    index = int(filename)
+    if not hasattr(g, 'partitions'):
+        g.partitions = Protein_Graph.get_graph_()
+    if index < len(g.partitions):
+        data_partition = g.partitions[index]
+    else:
+        data_partition = {"nodes": [], "links": []}
+    obj_response.script("addGraphData(" + json.dumps(data_partition) + "," + str(reset).lower() + ")")
 
 def set_nodelink_limit(obj_response, minlink_count, maxlink_count):
     toggle_listener(False)
@@ -126,6 +137,7 @@ def index():
 
     if g.sijax.is_sijax_request:
         g.sijax.register_callback('getDataPartions', get_graph_partions)
+        g.sijax.register_callback('getGraphPartition', get_graph_partition)
 #         g.sijax.register_callback('setNodeLinkLimit', set_nodelink_limit)
 #         g.sijax.register_callback('getProteinStats', get_protein_stats)
 #         g.sijax.register_callback('checkGraphUpdates', check_file_updates)
