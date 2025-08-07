@@ -176,7 +176,7 @@ class Protein_Graph:
                     if src_id and tgt_id and src_id == tgt_id:
                         resolved_pairs.append((src, tgt))
                 
-                interactions = Protein_Graph.fetch_interactions_batch(resolved_pairs, species)
+                interactions = Protein_Graph.fetch_interactions(resolved_pairs, species)
                 for (src, tgt), score_entry in interactions.items():
                     link_data = {
                         "source": src,
@@ -218,7 +218,7 @@ class Protein_Graph:
             return {"nodes": nodes, "links": links}
     
         step = Protein_Graph.data_part_width
-        partitions = Parallel(n_jobs=10, backend="threading")(
+        partitions = Parallel(n_jobs=2, backend="threading")(
             delayed(process_graph_chunk)(i, step, dict_json_)
             for i in range(0, len(dict_json_["nodes"]), step)
         )

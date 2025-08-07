@@ -366,13 +366,14 @@
               highlightLinks.add(link);
               highlightNodes.add(link.source.id);
               highlightNodes.add(link.target.id);
-            }
 
-            plotSelectedLink(link);
-            updateRadarLegend({ 
-              name: `${link.source.id + " → " + link.target.id}`, 
-              color: confidenceColorScale(link.score)
-            });
+              plotSelectedLink(link);
+              updateRadarLegend({ 
+                name: `${link.source.id + " → " + link.target.id}`, 
+                taxonid: `${String(link.ncbiTaxonId)}`,
+                color: confidenceColorScale(link.score)
+              });
+            }
             updateHighlight();
           });
 
@@ -870,6 +871,9 @@
         dataTable.row.add([node.id, totalLinks]);
       }
     });
+
+    $('#data-table tbody').off('click', 'tr');
+
     $('#data-table tbody').on('click', 'tr', function () {
       const rowData = dataTable.row(this).data();
       if (rowData) {
@@ -883,28 +887,34 @@
   function populateLinkTable(links) {
     const dataTable = $('#data-table').DataTable();
 
-      $('#data-table tbody').on('click', 'tr', function () {
-        const rowData = dataTable.row(this).data();
-        if (rowData) {
-          const sourceId = rowData[0];
-          const targetId = rowData[1];
-          searchAndFocusLink(sourceId, targetId);
-          const graphLinks = Graph.graphData().links;
-          // searching for link in graph data
-          const matchedLink = graphLinks.find(link => {
-            const src = typeof link.source === 'object' ? link.source.id : link.source;
-            const tgt = typeof link.target === 'object' ? link.target.id : link.target;
-            return (src === sourceId && tgt === targetId) || (src === targetId && tgt === sourceId);
+    $('#data-table tbody').off('click', 'tr');
+
+    $('#data-table tbody').on('click', 'tr', function () {
+      const rowData = dataTable.row(this).data();
+      if (rowData) {
+        const sourceId = rowData[0];
+        const targetId = rowData[1];
+        const taxonId = String(rowData[3]);
+        searchAndFocusLink(sourceId, targetId, taxonId);
+        const graphLinks = Graph.graphData().links;
+        // searching for link in graph data
+        const matchedLink = graphLinks.find(link => {
+          const src = typeof link.source === 'object' ? link.source.id : link.source;
+          const tgt = typeof link.target === 'object' ? link.target.id : link.target;
+          const id = String(link.ncbiTaxonId);
+          return (src === sourceId && tgt === targetId && id === taxonId);
+        });
+
+        if (matchedLink) {
+          plotSelectedLink(matchedLink);
+          updateRadarLegend({ 
+            name: `${matchedLink.source.id + " → " + matchedLink.target.id}`, 
+            taxonid: `${matchedLink.ncbiTaxonId}`,
+            color: confidenceColorScale(matchedLink.score)
           });
-          if (matchedLink) {
-            plotSelectedLink(matchedLink);
-            updateRadarLegend({ 
-              name: `${matchedLink.source.id + " → " + matchedLink.target.id}`, 
-              color: confidenceColorScale(matchedLink.score)
-            });
-          }
         }
-      });
+      }
+    });
 
     const data = links.map(link => {
       const source = typeof link.source === 'object' ? link.source.id : link.source;
@@ -1034,7 +1044,7 @@
     const height = +svg.attr("height");
     const margin = { top: 10, right: 10, bottom: 30, left: 30 };
     const radius = 60;
-    const paddingX = 30;
+    const paddingX = 40;
     const paddingY = 10;
     const centerX = width / 2 + paddingX;
     const centerY = height / 2 + paddingY;
@@ -1156,10 +1166,18 @@
     legend.append("text")
       .attr('class', 'selected')
       .attr("x", 20)
-      .attr("y", 15)
+      .attr("y", 20)
       .attr("fill", "white")
       .style("font-size", "12px")
       .text(label.name);
+
+    legend.append("text")
+      .attr('class', 'selected')
+      .attr("x", 20)
+      .attr("y", 35) 
+      .attr("fill", "white")
+      .style("font-size", "12px")
+      .text(`${label.taxonid}`);
   }
 
 
@@ -1354,10 +1372,11 @@
     }
   }
 
-  function searchAndFocusLink(sourceId, targetId) {
+  function searchAndFocusLink(sourceId, targetId, taxonId) {
     const link = Graph.graphData().links.find(l =>
       (l.source.id || l.source) === sourceId &&
-      (l.target.id || l.target) === targetId
+      (l.target.id || l.target) === targetId &&
+      (String(l.ncbiTaxonId) === String(taxonId))
     );
 
     if (link) {
@@ -1400,8 +1419,6 @@
       highlightLinks.add(link);
 
       updateHighlight();
-    } else {
-      alert("Link not found in the graph.");
     }
   }
 
@@ -1410,7 +1427,7 @@
     const width = +svg.attr("width");
     const height = +svg.attr("height");
     const radius = 60;
-    const paddingX = 30;
+    const paddingX = 40;
     const paddingY = 10;
     const centerX = width / 2 + paddingX;
     const centerY = height / 2 + paddingY;
