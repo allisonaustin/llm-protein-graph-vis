@@ -300,7 +300,7 @@
             if(showLinkParticle)
               return 8;
             else
-              return [...highlightLinks].filter((x) => x.source.id===link.source.id && x.target.id===link.target.id).length !== 0 ? 8 : 0;
+              return [...highlightLinks].filter((x) => x.source.id===link.source.id && x.target.id===link.target.id && x.ncbiTaxonId===link.ncbiTaxonId).length !== 0 ? 8 : 0;
           })
           .linkDirectionalParticleWidth(2)
           .linkWidth(link => (showLinkWidth && link.penwidth) ? link.penwidth : 0 )
@@ -308,7 +308,7 @@
           .linkDirectionalArrowLength(2)
           .linkDirectionalArrowRelPos(1)
           .linkDirectionalArrowColor(link => link.color ? pSBC ( 0.1, standardize_color(link.color), color8 ) : 'gray' )
-          .linkCurvature(0.2)
+          .linkCurvature(link => link.curvature || 0.2)
           .onNodeClick(node => {
 
             // no state change
@@ -318,7 +318,12 @@
 
               highlightNodes.add(node.id);
               node.neighbors.forEach(neighbor => highlightNodes.add(neighbor));
-              node.links.forEach(link => highlightLinks.add(link));
+              // node.links.forEach(link => highlightLinks.add(link));
+              const matchingLinks = Graph.graphData().links.filter(l =>
+                (l.source.id || l.source) === node.id ||
+                (l.target.id || l.target) === node.id
+              );
+              matchingLinks.forEach(link => highlightLinks.add(link));
 
             }else{ // clear link directions
 
@@ -328,7 +333,12 @@
 
               highlightNodes.delete(node.id);
               node.neighbors.forEach(neighbor => highlightNodes.delete(neighbor));
-              node.links.forEach(link => highlightLinks.delete(link));
+              // node.links.forEach(link => highlightLinks.delete(link));
+              const matchingLinks = Graph.graphData().links.filter(l =>
+                (l.source.id || l.source) === node.id ||
+                (l.target.id || l.target) === node.id
+              );
+              matchingLinks.forEach(link => highlightLinks.delete(link));
 
               updateHighlight();
               closeProteinModal(node.id);
@@ -356,6 +366,7 @@
               highlightNodes.clear();
               highlightLinks.clear();
               updateHighlight();
+              d3.select("#radar-chart g.legend").selectAll('.selected').remove();
               return;
             }
 
@@ -503,6 +514,34 @@
     });
   }
 
+  function assignLinkCurvature(links) {
+    const linkPairs = {};
+
+    links.forEach(link => {
+      const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+      const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+
+      const key = `${sourceId}-${targetId}`;
+      const reverseKey = `${targetId}-${sourceId}`;
+
+      if (linkPairs[key]) {
+        linkPairs[key].push(link);
+      } else if (linkPairs[reverseKey]) {
+        linkPairs[reverseKey].push(link);
+      } else {
+        linkPairs[key] = [link];
+      }
+    });
+
+    Object.values(linkPairs).forEach(group => {
+      const mid = Math.floor(group.length / 2);
+      group.forEach((link, i) => {
+        const offset = (i - mid) * 0.2;
+        link.curvature = offset === 0 ? 0.1 : offset;
+      });
+    });
+  }
+
 
   // update graph with new data
   function addGraphData(dataPart, reset = false){
@@ -559,6 +598,8 @@
       nodes: [...oldNodes, ...newNodes ],
       links: links.concat(dataPart.links)//[...links, ...dataPart.links ]
     };
+
+    assignLinkCurvature(result.links);
 
     const nlen = result.nodes ? new Set(result.nodes).size : 0;
     const llen = result.links ? getUniqueLinks(result.links).length : 0;
@@ -1635,23 +1676,23 @@
   folder3.add({ 'Pause/Resume Data Reload': pauseResumeDataLoad }, 'Pause/Resume Data Reload');
   folder3.open()
   
-  folder5.add(settings, 'EdgeColor', ['Confidence', 'Custom']).onChange(val => {
-    edgeColor = val;
-    document.querySelectorAll('.edge-legend').forEach(el => el.style.display = 'none');
-    // Show the selected legend
-    if (val === 'Confidence') {
-      document.getElementById('legend-confidence').style.display = 'block';
-    } else if (val === 'Custom') {
-      document.getElementById('legend-db').style.display = 'block';
-    }
-    Graph.linkColor(link => {
-      if (val === 'Confidence') {
-        return link.score ? confidenceColorScale(link.score) : 'gray';
-      } else {
-        return link.color ? link.color : 'gray';
-      }
-    });
-  });
+  // folder5.add(settings, 'EdgeColor', ['Confidence', 'Custom']).onChange(val => {
+  //   edgeColor = val;
+  //   document.querySelectorAll('.edge-legend').forEach(el => el.style.display = 'none');
+  //   // Show the selected legend
+  //   if (val === 'Confidence') {
+  //     document.getElementById('legend-confidence').style.display = 'block';
+  //   } else if (val === 'Custom') {
+  //     document.getElementById('legend-db').style.display = 'block';
+  //   }
+  //   Graph.linkColor(link => {
+  //     if (val === 'Confidence') {
+  //       return link.score ? confidenceColorScale(link.score) : 'gray';
+  //     } else {
+  //       return link.color ? link.color : 'gray';
+  //     }
+  //   });
+  // });
   folder5.add(settings, 'Layout', ['Force-Directed', 'Spherical']).onChange(val => {
     if (layerController) {
       folder5.remove(layerController);
