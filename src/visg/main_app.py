@@ -137,7 +137,7 @@ def index():
 
     if g.sijax.is_sijax_request:
         g.sijax.register_callback('getDataPartions', get_graph_partions)
-        g.sijax.register_callback('getGraphPartition', get_graph_partition)
+#         g.sijax.register_callback('getGraphPartition', get_graph_partition)
 #         g.sijax.register_callback('setNodeLinkLimit', set_nodelink_limit)
 #         g.sijax.register_callback('getProteinStats', get_protein_stats)
 #         g.sijax.register_callback('checkGraphUpdates', check_file_updates)

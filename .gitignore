@@ -170,3 +170,5 @@ src/visg/static/js/sijax/
 
 .idea/
 
+protein_vectorstore/
+go-data/

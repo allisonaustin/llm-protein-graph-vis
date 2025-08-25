@@ -352,3 +352,4 @@ class Protein_Graph:
 
         Protein_Graph.finalK = increment_k if set_iteratons else increment_k + Protein_Graph.finalK
         return Protein_Graph.finalK
+    

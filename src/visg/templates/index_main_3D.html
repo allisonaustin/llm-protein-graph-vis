@@ -100,7 +100,7 @@
 
     <!-- Chat -->
     <div class="card-header bg-secondary text-white collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-chat">
-      <span>Chatbot</span>
+      <span>Chat</span>
        <i class="chevron-icon bi bi-chevron-right"></i>
     </div>
     <div id="collapse-chat" class="collapse">
@@ -1470,6 +1470,10 @@
   }
 
   function plotSelectedLink(selectedLink) {
+    const scoreFields = ['nscore', 'fscore', 'pscore', 'ascore', 'escore', 'dscore', 'tscore'];
+    if (scoreFields.every(field => !selectedLink[field] || selectedLink[field] === 0)) {
+      return; 
+    }
     const svg = d3.select("#radar-chart");
     const width = +svg.attr("width");
     const height = +svg.attr("height");
@@ -1479,7 +1483,6 @@
     const centerX = width / 2 + paddingX;
     const centerY = height / 2 + paddingY;
 
-    const scoreFields = ['nscore', 'fscore', 'pscore', 'ascore', 'escore', 'dscore', 'tscore'];
     const angleSlice = (2 * Math.PI) / scoreFields.length;
     const scale = d3.scaleLinear().domain([0, 1]).range([0, radius]);
     const linkColor = confidenceColorScale(selectedLink.score);
