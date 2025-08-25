@@ -1,5 +1,33 @@
+#main-title-container {
+  position: fixed;
+  display: flex;
+  flex-direction: row;
+  top: 0;
+  width: 100%;
+  background: #222; 
+  color: white;
+  padding: 6px 0; 
+  justify-content: space-between;
+  font-weight: bold;
+  z-index: 1000;
+  box-sizing: border-box;
+  border-bottom: 1px solid #444;
+}
+
+#main-title-container p {
+  margin: 0;
+  padding-right: 15px;
+  width: 100%;
+  margin-bottom: 5px;
+  font-family: 'Lucida Grande', sans-serif;
+  font-size: medium;
+  font-style: italic;
+  text-align: right;
+}
+
 body{
     margin:0px;
+    padding-top: 50px;
 }
 .button{
     background-color: #2C2C2C;
@@ -7,24 +35,13 @@ body{
     color: white;
 }
 
-#stats {
-    color:white;
-    position: fixed;
-    z-index: 1;
-    padding-left: 10px;
-    padding-top: 45px;
-    font-style: italic;
-    font-family: 'Lucida Grande', sans-serif;
-    /* Helvetica, Arial, sans-serif; */
-    font-size:medium;
-}
-
 #title {
     font-family: 'Lucida Grande', sans-serif;
     text-shadow: 2px 2px 4px #000000;
-    font-size:xx-large;
-    text-align: center;
+    font-size:large;
+    text-align: left;
     /* padding-top: 5px; */
+    padding-left: 15px;
     margin-top: 15px;
     z-index: 1;
 }
@@ -46,12 +63,13 @@ div.dg{
     font-size: medium;
 }
 div.dg.ac{
+    top: 100px;
     z-index: 2 !important;
 }
 
 #protein-info-container {
   font-family: 'Lucida Grande', sans-serif;
-  width: 22rem; 
+  width: 25rem; 
   height: 85vh; 
   z-index: 1000;
   display: flex;

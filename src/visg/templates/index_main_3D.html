@@ -41,11 +41,9 @@
   <script type="text/javascript" src="/static/js/my_utils.js"></script>
 </head>
 <body>
-<div>
-  <p id="stats" style="color:white; position: fixed; z-index: 1; padding-left: 10px; padding-top: 60px" ><i></i></p>
-</div>
 <div id="main-title-container">
-  <p id="title" style="color:white; position: fixed; z-index: 1;  " >Protein-Protein Interactions using Large Language Models</p>
+  <h4 id="title">ExPPI: Explainable PPI Network</h4>
+  <p id="stats"><i></i></p>
 </div>
 <div id="3d-graph" style="position: fixed;"></div>
 
@@ -80,7 +78,7 @@
     <!-- Interaction score distribution -->
     <div class="card bg-dark text-white shadow">
       <div class="card-header bg-secondary text-white collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-hist">
-        <span>Edge Confidence</span>
+        <span>Reliability Distribution</span>
          <i class="chevron-icon bi bi-chevron-right"></i>
       </div>
       <div id="collapse-hist" class="collapse">
@@ -140,7 +138,7 @@
 
 <div id ="logo-images" style="visibility:visible;">
   <div id="legend-confidence" class='edge-legend' style="position: fixed; z-index: 10; right: 40px; bottom: 35px; text-align: center;">
-    <strong>Confidence Score</strong>
+    <strong>Reliability Score</strong>
     <div style="width: 250px; height: 15px; background: linear-gradient(to right, red, green); border: 1px solid #ccc;"></div>
     <div style="display: flex; justify-content: space-between; font-size: 12px; color: white;">
       <span>Low (0.0)</span>
@@ -227,7 +225,7 @@
   var uniqueTaxonIds = new Set(); // GUI species list
   var activeSpecies = {}; // GUI toggle states
   var existingControllers = {};
-  var interactionGroups = [{key: "Unverified", label: "scores = 0.0"}, {key: "Verified", label: "scores > 0.0"}]
+  var interactionGroups = [{key: "string-db", label: "verified"}, {key: "GO-BP sim", label: "unverified"}]
   const activeGroups = {
     Unverified: true,
     Verified: true
@@ -235,7 +233,7 @@
   const taxonCounts = {};
   let totalLinks = 0;
 
-  const confidenceColorScale = d3.scaleLinear()
+  const colorScale = d3.scaleLinear()
     .domain([0, 1.0])  
     .range(["red", "green"]);
 
@@ -298,14 +296,13 @@
           })
           .nodeVal(node => (node.neighbors.length > 20 && node.neighbors.length < 30) ? 2 : (node.neighbors.length >= 30) ? 3 : 1)
           .nodeResolution(20)
-          // .linkColor(link => link.color ? link.color : 'gray' )
-          .linkColor(link => link.score ? confidenceColorScale(link.score) : 'gray')
+          .linkColor(link => link.reliability_score ? colorScale(link.reliability_score) : 'gray')
           .linkOpacity(1)
           .linkDirectionalParticles(link => {
             if(showLinkParticle)
               return 8;
             else
-              return [...highlightLinks].filter((x) => x.source.id===link.source.id && x.target.id===link.target.id && x.ncbiTaxonId===link.ncbiTaxonId).length !== 0 ? 8 : 0;
+              return [...highlightLinks].filter((x) => x.source.id===link.source.id && x.target.id===link.target.id).length !== 0 ? 8 : 0;
           })
           .linkDirectionalParticleWidth(2)
           .linkWidth(link => (showLinkWidth && link.penwidth) ? link.penwidth : 0 )
@@ -379,7 +376,7 @@
             highlightNodes.clear();
             highlightLinks.clear();
 
-            if (link && !highlightNodes.has(link.source.id) && !highlightNodes.has(link.target.id)) {
+            if (link && !highlightNodes.has(link.source.id) && !highlightNodes.has(link.target.id) && link.scores.ncbiTaxonId) {
               highlightLinks.add(link);
               highlightNodes.add(link.source.id);
               highlightNodes.add(link.target.id);
@@ -387,8 +384,7 @@
               plotSelectedLink(link);
               updateRadarLegend({ 
                 name: `${link.source.id + " → " + link.target.id}`, 
-                taxonid: `${String(link.ncbiTaxonId)}`,
-                color: confidenceColorScale(link.score)
+                color: colorScale(link.reliability_score)
               });
             }
             updateHighlight();
@@ -618,27 +614,27 @@
     drawRadarChart(result.links);
     
     // scanning new links for unique taxon Ids
-    dataPart.links.forEach(link => {
-      const id = String(link.ncbiTaxonId);
-      taxonCounts[id] = (taxonCounts[id] || 0) + 1;
-      totalLinks++;
-      if (!uniqueTaxonIds.has(id)) {
-        uniqueTaxonIds.add(id);
-        activeSpecies[id] = true;
-      }
-    });
-    uniqueTaxonIds.forEach(taxonId => {
-      const percent = ((taxonCounts[taxonId] / totalLinks) * 100).toFixed(1);
-      const label = `${taxonId} (${percent}%)`;
+    // dataPart.links.forEach(link => {
+    //   const id = String(link.ncbiTaxonId);
+    //   taxonCounts[id] = (taxonCounts[id] || 0) + 1;
+    //   totalLinks++;
+    //   if (!uniqueTaxonIds.has(id)) {
+    //     uniqueTaxonIds.add(id);
+    //     activeSpecies[id] = true;
+    //   }
+    // });
+    // uniqueTaxonIds.forEach(taxonId => {
+    //   const percent = ((taxonCounts[taxonId] / totalLinks) * 100).toFixed(1);
+    //   const label = `${taxonId} (${percent}%)`;
       
-     if (existingControllers.hasOwnProperty(taxonId)) {
-        folder4.remove(existingControllers[taxonId]);
-      }
-      const controller = folder4.add(activeSpecies, taxonId).name(label).onChange(updateLinks);
-      existingControllers[taxonId] = controller;
-    });
-    folder4.domElement.style.width = '350px';
-    folder4.open();
+    //  if (existingControllers.hasOwnProperty(taxonId)) {
+    //     folder4.remove(existingControllers[taxonId]);
+    //   }
+    //   const controller = folder4.add(activeSpecies, taxonId).name(label).onChange(updateLinks);
+    //   existingControllers[taxonId] = controller;
+    // });
+    // folder4.domElement.style.width = '350px';
+    // folder4.open();
 
     Graph.graphData(result);
     if (currLayout === 'Spherical') {
@@ -941,23 +937,21 @@
       if (rowData) {
         const sourceId = rowData[0];
         const targetId = rowData[1];
-        const taxonId = String(rowData[3]);
-        searchAndFocusLink(sourceId, targetId, taxonId);
+        const sourceData = rowData[3];
+        searchAndFocusLink(sourceId, targetId);
         const graphLinks = Graph.graphData().links;
         // searching for link in graph data
         const matchedLink = graphLinks.find(link => {
           const src = typeof link.source === 'object' ? link.source.id : link.source;
           const tgt = typeof link.target === 'object' ? link.target.id : link.target;
-          const id = String(link.ncbiTaxonId);
-          return (src === sourceId && tgt === targetId && id === taxonId);
+          return (src === sourceId && tgt === targetId);
         });
 
         if (matchedLink) {
           plotSelectedLink(matchedLink);
           updateRadarLegend({ 
             name: `${matchedLink.source.id + " → " + matchedLink.target.id}`, 
-            taxonid: `${matchedLink.ncbiTaxonId}`,
-            color: confidenceColorScale(matchedLink.score)
+            color: colorScale(matchedLink.reliability_score)
           });
         }
       }
@@ -966,16 +960,16 @@
     const data = links.map(link => {
       const source = typeof link.source === 'object' ? link.source.id : link.source;
       const target = typeof link.target === 'object' ? link.target.id : link.target;
-      const confidence = link.score != null ? link.score : 0;
-      const taxonId = link.ncbiTaxonId != null ? link.ncbiTaxonId : 'N/A';
-      const color = confidenceColorScale(confidence);
+      const confidence = link.reliability_score != null ? link.reliability_score : 0;
+      const sourceData = link.scores.ncbiTaxonId ? 'string-db' : 'GO-BP similarity'
+      const color = colorScale(confidence);
 
     return [
       source,
       target,
       `<span style="color: ${color}; font-weight: bold;">${confidence.toFixed(3)}</span>`,
-      taxonId
-      ];
+      sourceData      
+    ];
     });
 
     dataTable.rows.add(data).draw();
@@ -993,10 +987,8 @@
     const innerHeight = height - margin.top - margin.bottom;
 
     const scores = links.filter(d => 
-      d !== undefined && 
-      d.ncbiTaxonId !== 'N/A' && // proteins have a shared organism
-      d.score !== 0.0 // direct interaction exists
-    ).map(d => d.score);
+      d !== undefined
+    ).map(d => d.reliability_score);
 
     const tooltip = d3.select("#tooltip");
 
@@ -1046,7 +1038,7 @@
       .attr("text-anchor", "middle")
       .attr("x", margin.left + innerWidth / 2)
       .attr("y", height - 5)
-      .text("Confidence Score")
+      .text("Reliability Score")
       .style('font-size', '12px')
       .style("fill", "white");
 
@@ -1125,16 +1117,15 @@
     // Filter valid scores
     const validLinks = links.filter(d =>
       d &&
-      d.ncbiTaxonId !== 'N/A' &&
-      d.score !== 0 &&
-      scoreFields.some(f => d[f] !== undefined)
+      d.reliability_score !== 0 &&
+      scoreFields.some(f => d.scores[f] !== undefined)
     );
 
     if (validLinks.length === 0) return;
 
     // Compute average for each field
     const averages = scoreFields.map(field => {
-      const values = validLinks.map(d => +d[field] || 0).filter(v => v > 0);
+      const values = validLinks.map(d => +d.scores[field] || 0).filter(v => v > 0);
       const sum = values.reduce((a, b) => a + b, 0);
       const avg = values.length ? sum / values.length : 0;
       return { axis: field, value: avg };
@@ -1217,14 +1208,6 @@
       .attr("fill", "white")
       .style("font-size", "12px")
       .text(label.name);
-
-    legend.append("text")
-      .attr('class', 'selected')
-      .attr("x", 20)
-      .attr("y", 35) 
-      .attr("fill", "white")
-      .style("font-size", "12px")
-      .text(`${label.taxonid}`);
   }
 
 
@@ -1422,9 +1405,7 @@
   function searchAndFocusLink(sourceId, targetId, taxonId) {
     const link = Graph.graphData().links.find(l =>
       (l.source.id || l.source) === sourceId &&
-      (l.target.id || l.target) === targetId &&
-      (String(l.ncbiTaxonId) === String(taxonId))
-    );
+      (l.target.id || l.target) === targetId);
 
     if (link) {
       const node = typeof link.source === 'object' ? link.source : Graph.graphData().nodes.find(n => n.id === link.source);
@@ -1471,7 +1452,7 @@
 
   function plotSelectedLink(selectedLink) {
     const scoreFields = ['nscore', 'fscore', 'pscore', 'ascore', 'escore', 'dscore', 'tscore'];
-    if (scoreFields.every(field => !selectedLink[field] || selectedLink[field] === 0)) {
+    if (scoreFields.every(field => !selectedLink.scores[field] || selectedLink.scores[field] === 0)) {
       return; 
     }
     const svg = d3.select("#radar-chart");
@@ -1485,13 +1466,13 @@
 
     const angleSlice = (2 * Math.PI) / scoreFields.length;
     const scale = d3.scaleLinear().domain([0, 1]).range([0, radius]);
-    const linkColor = confidenceColorScale(selectedLink.score);
+    const linkColor = colorScale(selectedLink.reliability_score);
 
     svg.selectAll(".selected-link-line").remove();
 
     const points = scoreFields.map((field, i) => ({
       axis: field,
-      value: selectedLink[field] || 0,
+      value: selectedLink.scores[field] || 0,
       angle: i * angleSlice
     }));
 
@@ -1616,9 +1597,8 @@
 
   
   function filterLinkByGroup(link) {
-    const score = Number(link.score) || 0.0;
-    if (score === 0.0 && activeGroups.Unverified) return true;
-    if (score > 0.0 && activeGroups.Verified) return true;
+    if (link.scores.resnik_bp && activeGroups.Unverified) return true;
+    if (link.scores.ncbiTaxonId && activeGroups.Verified) return true;
     return false;
   }
 
@@ -1679,8 +1659,8 @@
   var layerController = null;
 
   var folder3 = gui.addFolder('GUI Buttons');
-  var folder4 = gui.addFolder('Organisms');
-  var folder6 = gui.addFolder('Interactions');
+  // var folder4 = gui.addFolder('Organisms');
+  var folder6 = gui.addFolder('Edges');
   var folder5 = gui.addFolder('Settings');
 
   folder3.add({ 'Zoom to Fit': zoomToFit }, 'Zoom to Fit');
@@ -1699,23 +1679,6 @@
   folder3.add({ 'Pause/Resume Data Reload': pauseResumeDataLoad }, 'Pause/Resume Data Reload');
   folder3.open()
   
-  // folder5.add(settings, 'EdgeColor', ['Confidence', 'Custom']).onChange(val => {
-  //   edgeColor = val;
-  //   document.querySelectorAll('.edge-legend').forEach(el => el.style.display = 'none');
-  //   // Show the selected legend
-  //   if (val === 'Confidence') {
-  //     document.getElementById('legend-confidence').style.display = 'block';
-  //   } else if (val === 'Custom') {
-  //     document.getElementById('legend-db').style.display = 'block';
-  //   }
-  //   Graph.linkColor(link => {
-  //     if (val === 'Confidence') {
-  //       return link.score ? confidenceColorScale(link.score) : 'gray';
-  //     } else {
-  //       return link.color ? link.color : 'gray';
-  //     }
-  //   });
-  // });
   folder5.add(settings, 'Layout', ['Force-Directed', 'Spherical']).onChange(val => {
     if (layerController) {
       folder5.remove(layerController);
@@ -1782,7 +1745,7 @@
     $('#tab-links').addClass('active-tab');
     $('#tab-nodes').removeClass('active-tab');
     currTable = 'Links';
-    rebuildTable(["Source", "Target", "Conf", "ncbiTaxonId"]);
+    rebuildTable(["Protein_A", "Protein_B", "Score", "Source"]);
     populateLinkTable(Graph.graphData().links);
   });
 
