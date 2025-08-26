@@ -83,19 +83,12 @@
       </div>
       <div id="collapse-hist" class="collapse">
         <div class="card-body p-2">
-          <svg id="score-histogram" width="300" height="120"></svg>
-           <svg id="radar-chart" width="280" height="160"></svg>
+          <svg id="score-histogram" width="360" height="120"></svg>
+           <svg id="radar-chart" width="280" height="180"></svg>
         </div>
       </div>
     </div>
-      <!-- Protein Search -->
-      <!-- <div class="card bg-dark text-white shadow">
-      <div class="card-body p-2 d-flex">
-        <input type="text" id="protein-search" class="form-control me-2 bg-secondary text-white border-0" placeholder="Enter protein name..." />
-        <button class="btn btn-outline-light" onclick="searchAndFocusNode()">Search</button>
-      </div>
-    </div> -->
-
+  
     <!-- Chat -->
     <div class="card-header bg-secondary text-white collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-chat">
       <span>Chat</span>
@@ -139,7 +132,7 @@
 <div id ="logo-images" style="visibility:visible;">
   <div id="legend-confidence" class='edge-legend' style="position: fixed; z-index: 10; right: 40px; bottom: 35px; text-align: center;">
     <strong>Reliability Score</strong>
-    <div style="width: 250px; height: 15px; background: linear-gradient(to right, red, green); border: 1px solid #ccc;"></div>
+    <div style="width: 250px; height: 15px; background: linear-gradient(to right, var(--low-confidence), var(--high-confidence)); border: 1px solid #ccc;"></div>
     <div style="display: flex; justify-content: space-between; font-size: 12px; color: white;">
       <span>Low (0.0)</span>
       <span>High (1.0)</span>
@@ -190,7 +183,6 @@
 </div>
 
 <script>
-
   const elem = document.getElementById('3d-graph');
   let isAnimationActive = true;
   const initData = {
@@ -225,17 +217,26 @@
   var uniqueTaxonIds = new Set(); // GUI species list
   var activeSpecies = {}; // GUI toggle states
   var existingControllers = {};
-  var interactionGroups = [{key: "string-db", label: "verified"}, {key: "GO-BP sim", label: "unverified"}]
   const activeGroups = {
     Unverified: true,
     Verified: true
   };
   const taxonCounts = {};
   let totalLinks = 0;
+  // colors 
+  const STRING_COLOR = "#40B0A6";
+  const GO_COLOR = "#E1BE6A";
+  const LOW_CONFIDENCE_COLOR = "#D41159";  
+  const HIGH_CONFIDENCE_COLOR = "#1A85FF"; 
+  const AVG_COLOR = "#44AA99";
+  const COLOR_SCALE = [LOW_CONFIDENCE_COLOR, HIGH_CONFIDENCE_COLOR];
+
+  document.documentElement.style.setProperty('--low-confidence', LOW_CONFIDENCE_COLOR);
+  document.documentElement.style.setProperty('--high-confidence', HIGH_CONFIDENCE_COLOR);
 
   const colorScale = d3.scaleLinear()
     .domain([0, 1.0])  
-    .range(["red", "green"]);
+    .range(COLOR_SCALE);
 
   document.querySelectorAll('.card-header.collapsible').forEach(header => {
     const targetId = header.getAttribute('data-bs-target');
@@ -510,7 +511,7 @@
       searching: true,
       lengthChange: false,
       info: false,
-      scrollY: '180px',
+      scrollY: '200px',
       scrollX: true,
       scrollCollapse: true
     });
@@ -612,7 +613,39 @@
     else if (currTable == 'Links') populateLinkTable(dataPart.links);
     drawConfidenceHistogram(result.links);
     drawRadarChart(result.links);
+
+    // counting verified/unverifed links for GUI
+    let verifiedCount = 0;
+    let unverifiedCount = 0;
+    let totalLinks = dataPart.links.length;
+
+    dataPart.links.forEach(link => {
+      if (link.scores && link.scores.resnik_bp !== undefined) {
+        unverifiedCount++;
+      } else {
+        verifiedCount++; 
+      }
+    })
     
+    const stringPercent = ((verifiedCount / totalLinks) * 100).toFixed(1);
+    const goPercent = ((unverifiedCount / totalLinks) * 100).toFixed(1);
+
+    if (existingControllers.hasOwnProperty('Verified')) {
+      folder6.remove(existingControllers['Verified']);
+    }
+    const verifiedLabel = `Verified ${stringPercent}%`;
+    const verifiedController = folder6.add(activeGroups, 'Verified').name(verifiedLabel).onChange(updateLinkGroups);
+    existingControllers['Verified'] = verifiedController;
+
+    if (existingControllers.hasOwnProperty('Unverified')) {
+      folder6.remove(existingControllers['Unverified']);
+    }
+    const unverifiedLabel = `Unverified ${goPercent}%`;
+    const unverifiedController = folder6.add(activeGroups, 'Unverified').name(unverifiedLabel).onChange(updateLinkGroups);
+    existingControllers['Unverified'] = unverifiedController;
+    folder6.domElement.style.width = '350px';
+    folder6.open();
+
     // scanning new links for unique taxon Ids
     // dataPart.links.forEach(link => {
     //   const id = String(link.ncbiTaxonId);
@@ -962,13 +995,14 @@
       const target = typeof link.target === 'object' ? link.target.id : link.target;
       const confidence = link.reliability_score != null ? link.reliability_score : 0;
       const sourceData = link.scores.ncbiTaxonId ? 'string-db' : 'GO-BP similarity'
+      const sourceColor = link.scores.ncbiTaxonId ? STRING_COLOR : GO_COLOR;
       const color = colorScale(confidence);
 
     return [
       source,
       target,
       `<span style="color: ${color}; font-weight: bold;">${confidence.toFixed(3)}</span>`,
-      sourceData      
+      `<span style="color: ${sourceColor}; font-weight: bold;">${sourceData}</span>`      
     ];
     });
 
@@ -981,85 +1015,160 @@
 
     const width = +svg.attr("width");
     const height = +svg.attr("height");
-    const margin = { top: 10, right: 10, bottom: 30, left: 30 };
-    const padding = 15;
+    const margin = { top: 10, right: 60, bottom: 10, left: 40 };
+    const padding = 30;
     const innerWidth = width - margin.left - margin.right;
-    const innerHeight = height - margin.top - margin.bottom;
-
-    const scores = links.filter(d => 
-      d !== undefined
-    ).map(d => d.reliability_score);
+    const innerHeight = height - margin.bottom;
 
     const tooltip = d3.select("#tooltip");
 
     const x = d3.scaleLinear()
       .domain([0, 1])
-      .range([margin.left + padding, width - margin.right]);
+      .range([padding, width - margin.right]);
 
-    const bins = d3.histogram()
-      .domain(x.domain())
-      .thresholds(x.ticks(20))(scores);
+    const binCount = 10;
+    const binStep = 1 / binCount;
+    const thresholds = d3.range(0, 1 + binStep, binStep);
+    // const thresholds = x.ticks(10);
+
+    const scoresString = links
+                          .filter(d => d.scores.ncbiTaxonId !== undefined)
+                          .map(d => d.reliability_score);
+    const scoresGO = links
+                      .filter(d => d.scores.resnik_bp !== undefined)
+                      .map(d => d.reliability_score);
+
+    const binsString = d3.histogram()
+        .domain([0, 1])
+        .thresholds(thresholds)(scoresString);
+
+    const binsGO = d3.histogram()
+        .domain([0, 1])
+        .thresholds(thresholds)(scoresGO);
+
+    const maxCount = d3.max([...binsString, ...binsGO], d => d.length);
 
     const y = d3.scaleLinear()
-      .domain([0, d3.max(bins, d => d.length)]).nice()
+      .domain([0, maxCount])
       .range([height - margin.bottom - padding, margin.top]);
 
-    const bar = svg.append("g")
-      .selectAll("rect")
-      .data(bins)
-      .join("rect")
-        .attr("x", d => x(d.x0) + 1)
-        .attr("y", d => y(d.length))
-        .attr("width", d => Math.max(0, x(d.x1) - x(d.x0) - 1))
-        .attr("height", d => y(0) - y(d.length))
-        .attr("fill", "#6ea8fe")
-        .on("mouseover", function(event, d) {
-          tooltip.style("opacity", 1)
-                .html(`Count: ${d.length}`)
-                .style("left", (event.pageX + 10) + "px")
-                .style("top", (event.pageY - 28) + "px");
-          d3.select(this).attr("fill", "#40a070"); // Highlight bar
-        })
-        .on("mouseout", function() {
-          tooltip.style("opacity", 0);
-          d3.select(this).attr("fill", "#6ea8fe"); // Reset color
-        });
+    const barWidth = (x(thresholds[1]) - x(thresholds[0])) / 2 - 1;
 
+    svg.selectAll("rect.string")
+      .data(binsString)
+      .join("rect")
+      .attr("class", "string")
+      .attr("x", d => x(d.x0))
+      .attr("y", d => y(d.length))
+      .attr("width", barWidth)
+      .attr("height", d => y(0) - y(d.length))
+      .attr("fill", "#6ea8fe")
+      .on("mouseover", function(event, d) {
+        tooltip.style("opacity", 1)
+              .html(`Count: ${d.length}`)
+              .style("left", (event.pageX + 10) + "px")
+              .style("top", (event.pageY - 28) + "px");
+        d3.select(this).attr("fill", "#8bb4f0"); // Highlight bar
+      })
+      .on("mouseout", function() {
+        tooltip.style("opacity", 0);
+        d3.select(this).attr("fill", "#6ea8fe"); // Reset color
+       });
+
+    // GO bars
+    svg.selectAll("rect.go")
+      .data(binsGO)
+      .join("rect")
+      .attr("class", "go")
+      .attr("x", d => x(d.x0) + barWidth + 1)
+      .attr("y", d => y(d.length))
+      .attr("width", barWidth)
+      .attr("height", d => y(0) - y(d.length))
+      .attr("fill", "#f5a623")
+      .on("mouseover", function(event, d) {
+        tooltip.style("opacity", 1)
+              .html(`Count: ${d.length}`)
+              .style("left", (event.pageX + 10) + "px")
+              .style("top", (event.pageY - 28) + "px");
+        d3.select(this).attr("fill", "#f2c16f"); 
+      })
+      .on("mouseout", function() {
+        tooltip.style("opacity", 0);
+        d3.select(this).attr("fill", "#f5a623");
+      });
+
+    // legend 
+    const legendData = [
+      { label: "string", color: "#6ea8fe" },
+      { label: "GO-BP", color: "#f5a623" }
+    ];
+
+    const legend = svg.append("g")
+      .attr("transform", `translate(${width - 50},${margin.top})`);
+
+    legend.selectAll("rect")
+      .data(legendData)
+      .join("rect")
+      .attr("x", 0)
+      .attr("y", (d, i) => i * 20)
+      .attr("width", 7)
+      .attr("height", 7)
+      .attr("fill", d => d.color);
+
+    legend.selectAll("text")
+      .data(legendData)
+      .join("text")
+      .attr("x", 12)
+      .attr("y", (d, i) => i * 20 + 7)
+      .style("fill", "white")
+      .style("font-size", "12px")
+      .text(d => d.label);
+    
     svg.append("g")
       .attr("transform", `translate(0,${height - margin.bottom - padding})`)
       .call(d3.axisBottom(x).ticks(5));
 
     svg.append("g")
-      .attr("transform", `translate(${margin.left + padding},0)`)
+      .attr("transform", `translate(${padding},0)`)
       .call(d3.axisLeft(y).ticks(5));
 
     // X-axis label
     svg.append("text")
       .attr("text-anchor", "middle")
       .attr("x", margin.left + innerWidth / 2)
-      .attr("y", height - 5)
-      .text("Reliability Score")
+      .attr("y", height - 20)
+      .text("Score")
       .style('font-size', '12px')
       .style("fill", "white");
 
     // Y-axis label
-    svg.append("text")
-      .attr("text-anchor", "middle")
-      .attr("transform", `rotate(-90)`)
-      .attr("x", -margin.top - innerHeight / 2)
-      .attr("y", 12)
-      .text("Frequency")
-      .style('font-size', '12px')
-      .style("fill", "white");
+    // svg.append("text")
+    //   .attr("text-anchor", "middle")
+    //   .attr("transform", `rotate(-90)`)
+    //   .attr("x", -margin.top - innerHeight / 2)
+    //   .attr("y", 12)
+    //   .text("Frequency")
+    //   .style('font-size', '12px')
+    //   .style("fill", "white");
   }
 
   function drawRadarChart(links) {
     const svg = d3.select("#radar-chart");
     svg.selectAll("*").remove(); // clear previous chart
 
+    // chart title
+    svg.append("text")
+      .attr("x", +svg.attr("width") / 2) 
+      .attr("y", 15)                     
+      .attr("text-anchor", "middle")
+      .attr("fill", "white")
+      .style("font-size", "16px")
+      .style("font-weight", "bold")
+      .text("string scores");
+
     const legendGroup = svg.select("g.legend");
     if (legendGroup.empty()) {
-      svg.append("g").attr("class", "legend").attr("transform", `translate(10, 20)`);
+      svg.append("g").attr("class", "legend").attr("transform", `translate(0, 30)`);
     }
     const legend = d3.select("#radar-chart g.legend");
     legend.selectAll("*").remove();
@@ -1069,7 +1178,7 @@
       .attr("y1", 0)
       .attr("x2", 15)
       .attr("y2", 0)
-      .attr("stroke", "#6ea8fe")
+      .attr("stroke", AVG_COLOR)
       .attr("stroke-width", 3);
 
     legend.append("text")
@@ -1083,8 +1192,8 @@
     const height = +svg.attr("height");
     const margin = { top: 10, right: 10, bottom: 30, left: 30 };
     const radius = 60;
-    const paddingX = 40;
-    const paddingY = 10;
+    const paddingX = 20;
+    const paddingY = 15;
     const centerX = width / 2 + paddingX;
     const centerY = height / 2 + paddingY;
 
@@ -1336,7 +1445,7 @@
 
     if (isMinimized) {
       body.style.display = 'block';
-      container.style.height = '80vh'; 
+      container.style.height = '90vh'; 
       btn.textContent = '—';
     } else {
       body.style.display = 'none';
@@ -1660,7 +1769,7 @@
 
   var folder3 = gui.addFolder('GUI Buttons');
   // var folder4 = gui.addFolder('Organisms');
-  var folder6 = gui.addFolder('Edges');
+  var folder6 = gui.addFolder('Edge Filtering');
   var folder5 = gui.addFolder('Settings');
 
   folder3.add({ 'Zoom to Fit': zoomToFit }, 'Zoom to Fit');
@@ -1705,13 +1814,6 @@
     }
   });
   folder5.open()
-
-  interactionGroups.forEach(opt => {
-    folder6.add(activeGroups, opt.key)
-          .name(opt.key)
-          .onChange(updateLinkGroups)
-  })
-  folder6.open()
 
   // main graph load and backend data update listener
   startDataLoad();
