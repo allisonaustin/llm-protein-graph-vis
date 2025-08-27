@@ -378,16 +378,18 @@
             highlightNodes.clear();
             highlightLinks.clear();
 
-            if (link && !highlightNodes.has(link.source.id) && !highlightNodes.has(link.target.id) && link.scores.ncbiTaxonId) {
+            if (link && !highlightNodes.has(link.source.id) && !highlightNodes.has(link.target.id)) {
               highlightLinks.add(link);
               highlightNodes.add(link.source.id);
               highlightNodes.add(link.target.id);
 
-              plotSelectedLink(link);
-              updateRadarLegend({ 
-                name: `${link.source.id + " → " + link.target.id}`, 
-                color: colorScale(link.reliability_score)
-              });
+              if (link.scores.ncbiTaxonId !== undefined) {
+                plotSelectedLink(link);
+                updateRadarLegend({ 
+                  name: `${link.source.id + " → " + link.target.id}`, 
+                  color: colorScale(link.reliability_score)
+                });
+              }
             }
             updateHighlight();
           });
@@ -672,7 +674,7 @@
     // folder4.open();
 
     // adding limit for graph size for user study
-    if (Graph.graphData().nodes.length >= 300 && !pauseAnimation) {
+    if (Graph.graphData().nodes.length >= 200 && !pauseAnimation) {
       pauseAnimation = true;
     }
 
@@ -987,7 +989,7 @@
           return (src === sourceId && tgt === targetId);
         });
 
-        if (matchedLink) {
+        if (matchedLink && matchedLink.scores.ncbiTaxonId !== undefined) {
           plotSelectedLink(matchedLink);
           updateRadarLegend({ 
             name: `${matchedLink.source.id + " → " + matchedLink.target.id}`, 
@@ -1229,7 +1231,8 @@
     const height = +svg.attr("height");
     const margin = { top: 10, right: 10, bottom: 30, left: 30 };
     const radius = 60;
-    const centerX = width / 2;
+    const paddingX = 30;
+    const centerX = width / 2 + paddingX;
     const centerY = height / 2;
 
     const tooltip = d3.select("body")
@@ -1386,8 +1389,6 @@
 
   function drawTermChart(links) {
     const topTerms = getTopSharedTerms(links, 5);
-
-    console.log(topTerms);
 
     const svg = d3.select("#term-chart");
     svg.selectAll("*").remove(); // clear previous chart
@@ -1709,7 +1710,8 @@
     const width = +svg.attr("width");
     const height = +svg.attr("height");
     const radius = 60;
-    const centerX = width / 2;
+    const paddingX = 30;
+    const centerX = width / 2 + paddingX;
     const centerY = height / 2;
 
     const angleSlice = (2 * Math.PI) / scoreFields.length;
