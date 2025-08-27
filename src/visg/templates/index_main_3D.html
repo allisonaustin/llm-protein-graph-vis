@@ -42,7 +42,7 @@
 </head>
 <body>
 <div id="main-title-container">
-  <h4 id="title">ExPPI: Explainable PPI Network</h4>
+  <h4 id="title">Explainable PPI Network</h4>
   <p id="stats"><i></i></p>
 </div>
 <div id="3d-graph" style="position: fixed;"></div>
@@ -511,7 +511,7 @@
       searching: true,
       lengthChange: false,
       info: false,
-      scrollY: '200px',
+      scrollY: '240px',
       scrollX: true,
       scrollCollapse: true
     });
@@ -620,7 +620,7 @@
     let totalLinks = dataPart.links.length;
 
     dataPart.links.forEach(link => {
-      if (link.scores && link.scores.resnik_bp !== undefined) {
+      if (link.scores && link.scores.ncbiTaxonId == undefined) {
         unverifiedCount++;
       } else {
         verifiedCount++; 
@@ -633,17 +633,17 @@
     if (existingControllers.hasOwnProperty('Verified')) {
       folder6.remove(existingControllers['Verified']);
     }
-    const verifiedLabel = `Verified ${stringPercent}%`;
+    const verifiedLabel = `Verified (${stringPercent}%)`;
     const verifiedController = folder6.add(activeGroups, 'Verified').name(verifiedLabel).onChange(updateLinkGroups);
     existingControllers['Verified'] = verifiedController;
 
     if (existingControllers.hasOwnProperty('Unverified')) {
       folder6.remove(existingControllers['Unverified']);
     }
-    const unverifiedLabel = `Unverified ${goPercent}%`;
+    const unverifiedLabel = `Unverified (${goPercent}%)`;
     const unverifiedController = folder6.add(activeGroups, 'Unverified').name(unverifiedLabel).onChange(updateLinkGroups);
     existingControllers['Unverified'] = unverifiedController;
-    folder6.domElement.style.width = '350px';
+    folder6.domElement.style.width = '380px';
     folder6.open();
 
     // scanning new links for unique taxon Ids
@@ -994,16 +994,46 @@
       const source = typeof link.source === 'object' ? link.source.id : link.source;
       const target = typeof link.target === 'object' ? link.target.id : link.target;
       const confidence = link.reliability_score != null ? link.reliability_score : 0;
-      const sourceData = link.scores.ncbiTaxonId ? 'string-db' : 'GO-BP similarity'
+      const sourceData = link.scores.ncbiTaxonId ? 'string-db' : 'GO-BP';
       const sourceColor = link.scores.ncbiTaxonId ? STRING_COLOR : GO_COLOR;
       const color = colorScale(confidence);
 
-    return [
-      source,
-      target,
-      `<span style="color: ${color}; font-weight: bold;">${confidence.toFixed(3)}</span>`,
-      `<span style="color: ${sourceColor}; font-weight: bold;">${sourceData}</span>`      
-    ];
+      const scoreLabels = {
+        nscore: 'Neighborhood',
+        fscore: 'Fusion',
+        pscore: 'Phylogenetic similarity',
+        ascore: 'Associations',
+        escore: 'Experiments',
+        dscore: 'Databases',
+        tscore: 'Text mining'
+      };
+
+      let details = "-";
+      if (!link.scores.ncbiTaxonId && link.scores?.top_terms) {
+        // GO-BP similarity case
+        details = link.scores.top_terms
+          .slice(0, 1)
+          .map(term => 
+            `${term.go_a.name} ↔ ${term.go_b.name} (similarity: ${term.score.toFixed(3)})`
+          )
+          .join('<br>');
+      } else if (link.scores.ncbiTaxonId) {
+        // STRING-db case
+        const { nscore = 0, dscore = 0, pscore = 0, escore = 0, ascore = 0, tscore = 0 } = link.scores;
+        const sortedScores = Object.entries({ nscore, dscore, pscore, escore, ascore, tscore })
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 1)
+          .map(([key, val]) => `${scoreLabels[key]}: ${val.toFixed(3)}`);
+        details = sortedScores.join('<br>');
+      }
+
+      return [
+        source,
+        target,
+        `<span style="color: ${color}; font-weight: bold;">${confidence.toFixed(3)}</span>`,
+        `<span style="color: ${sourceColor}; font-weight: bold;">${sourceData}</span>`,
+        details
+      ];
     });
 
     dataTable.rows.add(data).draw();
@@ -1035,7 +1065,7 @@
                           .filter(d => d.scores.ncbiTaxonId !== undefined)
                           .map(d => d.reliability_score);
     const scoresGO = links
-                      .filter(d => d.scores.resnik_bp !== undefined)
+                      .filter(d => d.scores.ncbiTaxonId == undefined)
                       .map(d => d.reliability_score);
 
     const binsString = d3.histogram()
@@ -1062,17 +1092,17 @@
       .attr("y", d => y(d.length))
       .attr("width", barWidth)
       .attr("height", d => y(0) - y(d.length))
-      .attr("fill", "#6ea8fe")
+      .attr("fill", STRING_COLOR)
       .on("mouseover", function(event, d) {
         tooltip.style("opacity", 1)
               .html(`Count: ${d.length}`)
               .style("left", (event.pageX + 10) + "px")
               .style("top", (event.pageY - 28) + "px");
-        d3.select(this).attr("fill", "#8bb4f0"); // Highlight bar
+        d3.select(this).attr("fill", "#a9e8e3"); // Highlight bar
       })
       .on("mouseout", function() {
         tooltip.style("opacity", 0);
-        d3.select(this).attr("fill", "#6ea8fe"); // Reset color
+        d3.select(this).attr("fill", STRING_COLOR); // Reset color
        });
 
     // GO bars
@@ -1084,23 +1114,23 @@
       .attr("y", d => y(d.length))
       .attr("width", barWidth)
       .attr("height", d => y(0) - y(d.length))
-      .attr("fill", "#f5a623")
+      .attr("fill", GO_COLOR)
       .on("mouseover", function(event, d) {
         tooltip.style("opacity", 1)
               .html(`Count: ${d.length}`)
               .style("left", (event.pageX + 10) + "px")
               .style("top", (event.pageY - 28) + "px");
-        d3.select(this).attr("fill", "#f2c16f"); 
+        d3.select(this).attr("fill", "#f7e09e"); 
       })
       .on("mouseout", function() {
         tooltip.style("opacity", 0);
-        d3.select(this).attr("fill", "#f5a623");
+        d3.select(this).attr("fill", GO_COLOR);
       });
 
     // legend 
     const legendData = [
-      { label: "string", color: "#6ea8fe" },
-      { label: "GO-BP", color: "#f5a623" }
+      { label: "string", color: STRING_COLOR },
+      { label: "GO-BP", color: GO_COLOR }
     ];
 
     const legend = svg.append("g")
@@ -1136,7 +1166,7 @@
     svg.append("text")
       .attr("text-anchor", "middle")
       .attr("x", margin.left + innerWidth / 2)
-      .attr("y", height - 20)
+      .attr("y", height - 10)
       .text("Score")
       .style('font-size', '12px')
       .style("fill", "white");
@@ -1164,7 +1194,7 @@
       .attr("fill", "white")
       .style("font-size", "16px")
       .style("font-weight", "bold")
-      .text("string scores");
+      .text("string-db scores");
 
     const legendGroup = svg.select("g.legend");
     if (legendGroup.empty()) {
@@ -1290,7 +1320,7 @@
     svg.append("path")
       .datum(averages)
       .attr("fill", "rgba(110, 168, 254, 0.3)")
-      .attr("stroke", "#6ea8fe")
+      .attr("stroke", AVG_COLOR)
       .attr("stroke-width", 2)
       .attr("transform", `translate(${centerX},${centerY})`)
       .attr("d", line);
@@ -1706,7 +1736,7 @@
 
   
   function filterLinkByGroup(link) {
-    if (link.scores.resnik_bp && activeGroups.Unverified) return true;
+    if (link.scores.ncbiTaxonId == undefined && activeGroups.Unverified) return true;
     if (link.scores.ncbiTaxonId && activeGroups.Verified) return true;
     return false;
   }
@@ -1847,7 +1877,7 @@
     $('#tab-links').addClass('active-tab');
     $('#tab-nodes').removeClass('active-tab');
     currTable = 'Links';
-    rebuildTable(["Protein_A", "Protein_B", "Score", "Source"]);
+    rebuildTable(["Protein_A", "Protein_B", "Score", "Source", "Metadata"]);
     populateLinkTable(Graph.graphData().links);
   });
 
