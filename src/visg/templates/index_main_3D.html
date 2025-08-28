@@ -78,7 +78,7 @@
     <!-- Interaction score distribution -->
     <div class="card bg-dark text-white shadow">
       <div class="card-header bg-secondary text-white collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-hist">
-        <span>Reliability Distribution</span>
+        <span>Network Charts</span>
          <i class="chevron-icon bi bi-chevron-right"></i>
       </div>
       <div id="collapse-hist" class="collapse">
@@ -195,6 +195,7 @@
   const highlightNodes = new Set(); 
   const highlightLinks = new Set();
   let hoverNodes = new Set(); // selected (red) nodes
+  let hoverNode = null; // single selected (red) node
   let focusNode = null;
   let showLinkParticle = false;
   let showNeighbors = false;
@@ -272,21 +273,21 @@
               } else{
                 let inD = [...new Set(node.in_degree)].length;
                 let outD = [...new Set(node.out_degree)].length;
-                return `${node.id} (In → ${inD}, Out → ${outD}) </br> Neighbors → ${getChunks(node.neighbors)}`
+                return `${node.id} (PREDICTED → ${inD}, PREDICTIONS → ${outD}) </br> Neighbors → ${getChunks(node.neighbors)}`
               }
 
             }else{
               let inD = [...new Set(node.in_degree)].length;
               let outD = [...new Set(node.out_degree)].length;
-              return `${node.id} (In → ${inD}, Out → ${outD})`
+              return `${node.id} (PREDICTED → ${inD}, PREDICTIONS → ${outD})`
             }
 
           })
           .nodeColor(node => {
 
             if(highlightNodes.has(node.id)){
-              if (hoverNodes.has(node.id)) {
-              // if(node.id === hoverNode) {
+              // if (hoverNodes.has(node.id)) {
+              if(node.id === hoverNode) {
                 return "red";
               }else{
                 return '#FFA000';
@@ -318,40 +319,25 @@
             // no state change
             if (!node && !highlightNodes.size) return;
 
-            if (node && !highlightNodes.has(node.id)) { // show link directions on hover
+            highlightNodes.clear();
+            highlightLinks.clear();
 
+             if (node && hoverNode != node) {
+              // Highlight this node and its neighbors
               highlightNodes.add(node.id);
               node.neighbors.forEach(neighbor => highlightNodes.add(neighbor));
-              // node.links.forEach(link => highlightLinks.add(link));
+
+              // Highlight links connected to this node
               const matchingLinks = Graph.graphData().links.filter(l =>
                 (l.source.id || l.source) === node.id ||
                 (l.target.id || l.target) === node.id
               );
               matchingLinks.forEach(link => highlightLinks.add(link));
 
-            }else{ // clear link directions
-
-              console.log('clearing...')
-              // highlightNodes.clear();
-              // highlightLinks.clear();
-
-              highlightNodes.delete(node.id);
-              node.neighbors.forEach(neighbor => highlightNodes.delete(neighbor));
-              // node.links.forEach(link => highlightLinks.delete(link));
-              const matchingLinks = Graph.graphData().links.filter(l =>
-                (l.source.id || l.source) === node.id ||
-                (l.target.id || l.target) === node.id
-              );
-              matchingLinks.forEach(link => highlightLinks.delete(link));
-
-              updateHighlight();
-              closeProteinModal(node.id);
-              return;
-
-            }
-
-            if (node) {
-              hoverNodes.add(node.id);
+              // Set the single hovered node
+              hoverNode = node.id;
+            } else {
+              hoverNode = null;
             }
 
             updateHighlight();
@@ -637,41 +623,18 @@
     if (existingControllers.hasOwnProperty('Verified')) {
       folder6.remove(existingControllers['Verified']);
     }
-    const verifiedLabel = `Verified (${stringPercent}%)`;
+    const verifiedLabel = `In string (${stringPercent}%)`;
     const verifiedController = folder6.add(activeGroups, 'Verified').name(verifiedLabel).onChange(updateLinkGroups);
     existingControllers['Verified'] = verifiedController;
 
     if (existingControllers.hasOwnProperty('Unverified')) {
       folder6.remove(existingControllers['Unverified']);
     }
-    const unverifiedLabel = `Unverified (${goPercent}%)`;
+    const unverifiedLabel = `Not in string (${goPercent}%)`;
     const unverifiedController = folder6.add(activeGroups, 'Unverified').name(unverifiedLabel).onChange(updateLinkGroups);
     existingControllers['Unverified'] = unverifiedController;
-    folder6.domElement.style.width = '400px';
+    folder6.domElement.style.width = '420px';
     folder6.open();
-
-    // scanning new links for unique taxon Ids
-    // dataPart.links.forEach(link => {
-    //   const id = String(link.ncbiTaxonId);
-    //   taxonCounts[id] = (taxonCounts[id] || 0) + 1;
-    //   totalLinks++;
-    //   if (!uniqueTaxonIds.has(id)) {
-    //     uniqueTaxonIds.add(id);
-    //     activeSpecies[id] = true;
-    //   }
-    // });
-    // uniqueTaxonIds.forEach(taxonId => {
-    //   const percent = ((taxonCounts[taxonId] / totalLinks) * 100).toFixed(1);
-    //   const label = `${taxonId} (${percent}%)`;
-      
-    //  if (existingControllers.hasOwnProperty(taxonId)) {
-    //     folder4.remove(existingControllers[taxonId]);
-    //   }
-    //   const controller = folder4.add(activeSpecies, taxonId).name(label).onChange(updateLinks);
-    //   existingControllers[taxonId] = controller;
-    // });
-    // folder4.domElement.style.width = '350px';
-    // folder4.open();
 
     // adding limit for graph size for user study
     if (Graph.graphData().nodes.length >= 200 && !pauseAnimation) {
@@ -757,7 +720,7 @@
       modal.style.cssText = `
         position: fixed;
         top: 100px;
-        left: 300px;
+        left: 600px;
         width: 300px;
         height: 330px;
         background: white;
@@ -843,7 +806,7 @@
       function showStructure(gene, structures, index) {
         const { pdbId, organism } = structures[index];
         frame.src = `https://molstar.org/viewer/?pdb=${pdbId}&hide-controls=1&collapse-left-panel=1`;
-        title.textContent = `${gene} | ${pdbId} (${organism})`;
+        title.textContent = `${gene} [PDBID: ${pdbId}] (${organism})`;
       }
 
       document.getElementById("prevPDB").onclick = () => {
@@ -897,18 +860,22 @@
 
       // updating line position on drag or animation
       function updateLine() {
-        const nodePos = Graph.graph2ScreenCoords(
-          Graph.graphData().nodes.find(n => n.id === gene).x,
-          Graph.graphData().nodes.find(n => n.id === gene).y,
-          Graph.graphData().nodes.find(n => n.id === gene).z
-        );
+        const node = Graph.graphData().nodes.find(n => n.id == gene);
+
+        if (!node) return;
+
+        const nodePos = Graph.graph2ScreenCoords(node.x, node.y, node.z);
 
         const modalRect = modal.getBoundingClientRect();
         const modalX = modalRect.left + modalRect.width / 2;
         const modalY = modalRect.top + modalRect.height / 2;
 
+        const HEADER_HEIGHT = document.getElementById("main-title-container").offsetHeight;
+
+        const adjustedPosY = nodePos.y + HEADER_HEIGHT;
+
         line.setAttribute("x1", nodePos.x);
-        line.setAttribute("y1", nodePos.y);
+        line.setAttribute("y1", adjustedPosY);
         line.setAttribute("x2", modalX);
         line.setAttribute("y2", modalY);
       }
@@ -1020,12 +987,10 @@
       let details = "-";
       if (!link.scores.ncbiTaxonId && link.scores?.top_terms) {
         // GO-BP similarity case
-        details = link.scores.top_terms
-          .slice(0, 1)
-          .map(term => 
-            `${term.go_a.name} ↔ ${term.go_b.name} (similarity: ${term.score.toFixed(3)})`
-          )
-          .join('<br>');
+        const topTerm = link.scores.top_terms[0]; 
+        if (topTerm) {
+          details = `A: ${topTerm.go_a.id} ${topTerm.go_a.name}<br>B: ${topTerm.go_b.id} ${topTerm.go_b.name}`;
+        }
       } else if (link.scores.ncbiTaxonId) {
         // STRING-db case
         const { nscore = 0, dscore = 0, pscore = 0, escore = 0, ascore = 0, tscore = 0 } = link.scores;
@@ -1580,6 +1545,14 @@
 
   }
 
+  const clearHighlights = () => {
+
+    highlightNodes.clear();
+    highlightLinks.clear();
+    updateHighlight();
+
+  }
+
   function toggleInfoBody() {
     const container = document.getElementById('protein-info-container');
     const body = document.getElementById('info-body');
@@ -1615,40 +1588,24 @@
         1000  // ms transition duration
       );
 
-      // no state change
-      if (!node && !highlightNodes.size) return;
+      highlightNodes.clear();
+      highlightLinks.clear();
 
-      if (node && !highlightNodes.has(node.id)) { // show link directions on hover
-
-        highlightNodes.clear();
-        highlightLinks.clear();
-
+      if (hoverNode != node) {
         highlightNodes.add(node.id);
         node.neighbors.forEach(neighbor => highlightNodes.add(neighbor));
-        // node.links.forEach(link => highlightLinks.add(link));
+        
         const matchingLinks = Graph.graphData().links.filter(l =>
           (l.source.id || l.source) === node.id ||
           (l.target.id || l.target) === node.id
         );
         matchingLinks.forEach(link => highlightLinks.add(link));
 
-      }else{ // clear link directions
-        highlightNodes.delete(node.id);
-        node.neighbors.forEach(neighbor => highlightNodes.delete(neighbor));
-        // node.links.forEach(link => highlightLinks.delete(link));
-        const matchingLinks = Graph.graphData().links.filter(l =>
-          (l.source.id || l.source) === node.id ||
-          (l.target.id || l.target) === node.id
-        );
-        matchingLinks.forEach(link => highlightLinks.delete(link));
-        updateHighlight();
-        return;
-      }
-      if (node) {
-        hoverNodes.add(node.id);
+        hoverNode = node.id;
       }
       updateHighlight();
     } else {
+      hoverNode = null;
       alert("Protein not found in the graph.");
     }
   }
@@ -1923,6 +1880,7 @@
   //   Graph.linkVisibility(() => true); 
   //   d3.selectAll('.legend-item').classed('selected', true);
   // }}, 'showAllLinks').name('Show All Links');
+  folder3.add({ 'Clear Highlights': clearHighlights }, 'Clear Highlights');
   folder3.add({ 'Show Link Directions': toggleLinkAnimation }, 'Show Link Directions');
   // folder3.add({ 'Show Link Width': toggleLinkWidth }, 'Show Link Width');
   folder3.add({ 'Show Node Neighbors': showNodeNeighbors }, 'Show Node Neighbors');
@@ -1989,7 +1947,7 @@
     $('#tab-links').addClass('active-tab');
     $('#tab-nodes').removeClass('active-tab');
     currTable = 'Links';
-    rebuildTable(["Protein_A", "Protein_B", "Score", "Source", "Shared Data"]);
+    rebuildTable(["Protein_A", "Protein_B", "Score", "Validation", "Source"]);
     populateLinkTable(Graph.graphData().links);
   });
 
