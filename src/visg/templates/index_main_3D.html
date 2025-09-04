@@ -78,14 +78,20 @@
     <!-- Interaction score distribution -->
     <div class="card bg-dark text-white shadow">
       <div class="card-header bg-secondary text-white collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-hist">
-        <span>Network Charts</span>
+        <span>Overall Network Stats</span>
          <i class="chevron-icon bi bi-chevron-right"></i>
       </div>
       <div id="collapse-hist" class="collapse">
         <div class="card-body p-2">
-          <svg id="score-histogram" width="360" height="120"></svg>
-          <svg id="radar-chart" width="280" height="180"></svg>
-          <svg id="term-chart" width="250" height="120"></svg>
+          <div style="width: 100%;">
+            <svg id="score-histogram" width="320" height="120"></svg>
+          </div>
+
+          <!-- Radar and term charts side by side -->
+          <div style="display: flex; flex-direction: row; gap: 10px; width: 100%;">
+            <svg id="radar-chart" width="180" height="160"></svg>
+            <svg id="term-chart" width="140" height="160"></svg>
+          </div>
         </div>
       </div>
     </div>
@@ -105,11 +111,11 @@
 
     <!-- Graph Tables -->
      <div class="card-header bg-secondary text-white collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-table">
-      <span>Graph Details</span>
+      <span>Network Details</span>
        <i class="chevron-icon bi bi-chevron-down"></i>
     </div>
     <div id="collapse-table" class="collapse show">
-      <div id="table-tabs" style="margin-bottom: 8px;">
+        <div id="table-tabs" style="margin-bottom: 8px;">
           <button id="tab-nodes" class="active-tab">Nodes</button>
           <button id="tab-links">Links</button>
         </div>
@@ -139,30 +145,21 @@
       <span>High (1.0)</span>
     </div>
   </div>
-  <div id="legend-db" class='edge-legend' style="position: fixed; display:none; z-index: 10; right: 40px; bottom: 35px;">
-    <strong>Custom Edges</strong>
-    <div style="margin-top: 5px;">
-      <div style="cursor: pointer;" class="legend-item selected" data-color="red">
-        <div style="width: 12px; height: 12px; background-color: red; border: 1px solid white; margin-right: 8px;"></div>
-        Not in big_table or STRING (novel)
+
+  <div id="legend-validation" class='edge-legend' style="position: fixed; z-index: 10; right: 40px; bottom: 35px; text-align: center; display: none;">
+    <strong>Validation Source</strong>
+    <div style="display: flex; justify-content: space-evenly; margin-top: 4px;">
+      <div style="display: flex; align-items: center; gap: 5px;">
+        <span style="width: 20px; height: 10px; background: #40B0A6; display: inline-block; border: 1px solid #ccc;"></span>
+        <span style="color: white; font-size: 12px;">STRING</span>
       </div>
-      <div style="cursor: pointer;" class="legend-item selected" data-color="orange">
-        <div style="width: 12px; height: 12px; background-color: orange; border: 1px solid white; margin-right: 8px;"></div>
-        In big_table, not in STRING
-      </div>
-      <div style="cursor: pointer;" class="legend-item selected" data-color="blue">
-        <div style="width: 12px; height: 12px; background-color: blue; border: 1px solid white; margin-right: 8px;"></div>
-        In STRING, not in big_table</div>
-      <div style="cursor: pointer;" class="legend-item selected" data-color="green">
-        <div style="width: 12px; height: 12px; background-color: green; border: 1px solid white; margin-right: 8px;"></div>
-        High score in both sources</div>
-      </div>
-      <div style="cursor: pointer;" class="legend-item selected" data-color="gray">
-        <div style="width: 12px; height: 12px; background-color: gray; border: 1px solid white; margin-right: 8px;"></div>
-        None of the above</div>
+      <div style="display: flex; align-items: center; gap: 5px;">
+        <span style="width: 20px; height: 10px; background: #E1BE6A; display: inline-block; border: 1px solid #ccc;"></span>
+        <span style="color: white; font-size: 12px;">GO-BP</span>
       </div>
     </div>
   </div>
+
   <div id="tooltip" style="
     position: absolute;
     background-color: rgba(0,0,0,0.7);
@@ -210,6 +207,8 @@
   const timerStep = 10800;
   var currTimerStep = timerStep;
   var currTable = 'Nodes';
+  var currTableInstance = null;
+  var searchQuery = null;
   var currLayout = 'Force-Directed';
   var numLayers = 4; // for concentric spherical layout
   var edgeColor = 'Confidence'; // default edge color
@@ -258,6 +257,21 @@
     });
   });
 
+  function showNodeLabel(node) {
+    let labelDiv = document.getElementById('selected-node-label');
+    if (!labelDiv) {
+      labelDiv = document.createElement('div');
+      labelDiv.id = 'selected-node-label';
+      labelDiv.className = 'node-label';
+      document.body.appendChild(labelDiv);
+    }
+    labelDiv.innerHTML = `${node.id}`;
+    const screenCoords = Graph.graph2ScreenCoords(node.x, node.y, node.z);
+    labelDiv.style.left = `${screenCoords.x + 10}px`;
+    labelDiv.style.top = `${screenCoords.y + 10}px`;
+  }
+
+
   const Graph = ForceGraph3D()(elem)
           .backgroundColor(bckColor) //#101020
           .graphData(initData)
@@ -273,13 +287,13 @@
               } else{
                 let inD = [...new Set(node.in_degree)].length;
                 let outD = [...new Set(node.out_degree)].length;
-                return `${node.id} (PREDICTED → ${inD}, PREDICTIONS → ${outD}) </br> Neighbors → ${getChunks(node.neighbors)}`
+                return `${node.id} (IN → ${inD}, OUT → ${outD}) </br> Neighbors → ${getChunks(node.neighbors)}`
               }
 
             }else{
               let inD = [...new Set(node.in_degree)].length;
               let outD = [...new Set(node.out_degree)].length;
-              return `${node.id} (PREDICTED → ${inD}, PREDICTIONS → ${outD})`
+              return `${node.id} (IN → ${inD}, OUT → ${outD})`
             }
 
           })
@@ -322,7 +336,7 @@
             highlightNodes.clear();
             highlightLinks.clear();
 
-             if (node && hoverNode != node) {
+             if (node && hoverNode != node.id) {
               // Highlight this node and its neighbors
               highlightNodes.add(node.id);
               node.neighbors.forEach(neighbor => highlightNodes.add(neighbor));
@@ -336,12 +350,13 @@
 
               // Set the single hovered node
               hoverNode = node.id;
+              showNodeLabel(node);
             } else {
+              const labelDiv = document.getElementById('selected-node-label');
+              if (labelDiv) labelDiv.remove();
               hoverNode = null;
             }
-
             updateHighlight();
-
             console.log("Node selected:", node.id)
           })
           .onNodeRightClick((node, event) => {
@@ -372,7 +387,7 @@
               if (link.scores.ncbiTaxonId !== undefined) {
                 plotSelectedLink(link);
                 updateRadarLegend({ 
-                  name: `${link.source.id + " → " + link.target.id}`, 
+                  name: `${link.source.id + "→" + link.target.id}`, 
                   color: colorScale(link.reliability_score)
                 });
               }
@@ -434,6 +449,28 @@
             .linkDirectionalParticles(Graph.linkDirectionalParticles());
   };
 
+  function updateLinkColor() {
+    const confidenceLegend = document.getElementById('legend-confidence');
+    const validationLegend = document.getElementById('legend-validation');
+
+    if (settings.EdgeColor === 'Confidence') {
+      confidenceLegend.style.display = 'block';
+      validationLegend.style.display = 'none';
+    } else if (settings.EdgeColor == 'Validation') {
+      confidenceLegend.style.display = 'none';
+      validationLegend.style.display = 'block';
+    } 
+
+    Graph.linkColor(link => {
+      if (settings.EdgeColor == 'Confidence') {
+        return colorScale(link.reliability_score);
+      } else if (settings.EdgeColor == 'Validation') {
+        return link.scores.ncbiTaxonId ? STRING_COLOR : GO_COLOR;
+      }
+    })
+    Graph.refresh && Graph.refresh();
+  }
+
 
 
   // module for timed calls for graph updates
@@ -484,25 +521,32 @@
   function rebuildTable(columns) {
     if ($.fn.DataTable.isDataTable('#data-table')) {
       $('#data-table').DataTable().destroy();
-      $('#data-table tbody').empty();  
+      $('#data-table tbody').empty();
     }
 
     // building new header
     const headerRow = $('#table-header-row');
     headerRow.empty();
-    columns.forEach(col => {
-      headerRow.append(`<th>${col}</th>`);
-    });
+    columns.forEach(col => headerRow.append(`<th>${col}</th>`));
 
-    // Initialize new DataTable
-    $('#data-table').DataTable({
+    // initialize new DataTable
+    currTableInstance = $('#data-table').DataTable({
       paging: false,
       searching: true,
       lengthChange: false,
       info: false,
-      scrollY: '240px',
+      scrollY: $('#table-container').height(),
       scrollX: true,
       scrollCollapse: true
+    });
+
+    if (searchQuery) {
+      currTableInstance.search(searchQuery).draw();
+    }
+
+    // saving searches
+    currTableInstance.on('search.dt', function() {
+      searchQuery = currTableInstance.search();
     });
   }
 
@@ -623,14 +667,14 @@
     if (existingControllers.hasOwnProperty('Verified')) {
       folder6.remove(existingControllers['Verified']);
     }
-    const verifiedLabel = `In string (${stringPercent}%)`;
+    const verifiedLabel = `Verified (${stringPercent}%)`;
     const verifiedController = folder6.add(activeGroups, 'Verified').name(verifiedLabel).onChange(updateLinkGroups);
     existingControllers['Verified'] = verifiedController;
 
     if (existingControllers.hasOwnProperty('Unverified')) {
       folder6.remove(existingControllers['Unverified']);
     }
-    const unverifiedLabel = `Not in string (${goPercent}%)`;
+    const unverifiedLabel = `Not verified (${goPercent}%)`;
     const unverifiedController = folder6.add(activeGroups, 'Unverified').name(unverifiedLabel).onChange(updateLinkGroups);
     existingControllers['Unverified'] = unverifiedController;
     folder6.domElement.style.width = '420px';
@@ -755,8 +799,8 @@
       // Create nav controls
       const nav = document.createElement("div");
       nav.innerHTML = `
-        <button id="prevPDB">⟨</button>
-        <button id="nextPDB">⟩</button>
+        <button id="prevPDB-${gene}">⟨</button>
+        <button id="nextPDB-${gene}">⟩</button>
       `;
       Array.from(nav.children).forEach(btn => {
         btn.style.cssText = `
@@ -809,13 +853,13 @@
         title.textContent = `${gene} [PDBID: ${pdbId}] (${organism})`;
       }
 
-      document.getElementById("prevPDB").onclick = () => {
+      document.getElementById(`prevPDB-${gene}`).onclick = () => {
         if (currIdx > 0) {
           currIdx--;
           showStructure(gene, structures, currIdx);
         }
       };
-      document.getElementById("nextPDB").onclick = () => {
+      document.getElementById(`nextPDB-${gene}`).onclick = () => {
         if (currIdx < structures.length - 1) {
           currIdx++;
           showStructure(gene, structures, currIdx);
@@ -1019,16 +1063,16 @@
 
     const width = +svg.attr("width");
     const height = +svg.attr("height");
-    const margin = { top: 10, right: 60, bottom: 10, left: 40 };
+    const margin = { top: 25, right: 50, bottom: 10, left: 40 };
     const padding = 30;
-    const innerWidth = width - margin.left - margin.right;
-    const innerHeight = height - margin.bottom;
+    const innerWidth = width - margin.right;
+    const innerHeight = height - margin.bottom - padding;
 
     const tooltip = d3.select("#tooltip");
 
     const x = d3.scaleLinear()
       .domain([0, 1])
-      .range([padding, width - margin.right]);
+      .range([margin.left, innerWidth]);
 
     const binCount = 10;
     const binStep = 1 / binCount;
@@ -1054,7 +1098,7 @@
 
     const y = d3.scaleLinear()
       .domain([0, maxCount])
-      .range([height - margin.bottom - padding, margin.top]);
+      .range([innerHeight, margin.top]);
 
     const barWidth = (x(thresholds[1]) - x(thresholds[0])) / 2 - 1;
 
@@ -1129,11 +1173,11 @@
       .text(d => d.label);
     
     svg.append("g")
-      .attr("transform", `translate(0,${height - margin.bottom - padding})`)
+      .attr("transform", `translate(0,${innerHeight})`)
       .call(d3.axisBottom(x).ticks(5));
 
     svg.append("g")
-      .attr("transform", `translate(${padding},0)`)
+      .attr("transform", `translate(${margin.left},0)`)
       .call(d3.axisLeft(y).ticks(5));
 
     // X-axis label
@@ -1146,14 +1190,23 @@
       .style("fill", "white");
 
     // Y-axis label
-    // svg.append("text")
-    //   .attr("text-anchor", "middle")
-    //   .attr("transform", `rotate(-90)`)
-    //   .attr("x", -margin.top - innerHeight / 2)
-    //   .attr("y", 12)
-    //   .text("Frequency")
-    //   .style('font-size', '12px')
-    //   .style("fill", "white");
+    svg.append("text")
+      .attr("text-anchor", "middle")
+      .attr("transform", `rotate(-90)`)
+      .attr("x",  - (margin.top + innerHeight / 2) + 5)
+      .attr("y", 12)
+      .text("Frequency")
+      .style('font-size', '12px')
+      .style("fill", "white");
+    
+    svg.append("text")
+      .attr("x", (width) / 2) 
+      .attr("y", 15)                     
+      .attr("text-anchor", "middle")
+      .attr("fill", "white")
+      .style("font-size", "14px")
+      .style("font-weight", "bold")
+      .text("Reliability Score Distribution");
   }
 
   function drawRadarChart(links) {
@@ -1168,7 +1221,7 @@
       .attr("fill", "white")
       .style("font-size", "14px")
       .style("font-weight", "bold")
-      .text("string-db scores");
+      .text("STRING scores");
 
     const legendGroup = svg.select("g.legend");
     if (legendGroup.empty()) {
@@ -1177,28 +1230,28 @@
     const legend = d3.select("#radar-chart g.legend");
     legend.selectAll("*").remove();
 
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+    const margin = { top: 20, right: 10, bottom: 10, left: 10 };
+    const radius = 50;
+    const paddingY = 40; // for legend placement only
+    const centerX = width / 2;
+    const centerY = height / 2;
+
     legend.append("line")
       .attr("x1", 0)
-      .attr("y1", 0)
-      .attr("x2", 15)
-      .attr("y2", 0)
+      .attr("y1", height - paddingY)
+      .attr("x2", 10)
+      .attr("y2", height - paddingY)
       .attr("stroke", AVG_COLOR)
       .attr("stroke-width", 3);
 
     legend.append("text")
-      .attr("x", 20)
-      .attr("y", 5)
+      .attr("x", 15)
+      .attr("y", height - paddingY + 5)
       .attr("fill", "white")
       .style("font-size", "12px")
-      .text("Average");
-
-    const width = +svg.attr("width");
-    const height = +svg.attr("height");
-    const margin = { top: 10, right: 10, bottom: 30, left: 30 };
-    const radius = 60;
-    const paddingX = 30;
-    const centerX = width / 2 + paddingX;
-    const centerY = height / 2;
+      .text("Avg");
 
     const tooltip = d3.select("body")
       .append("div")
@@ -1301,22 +1354,26 @@
 
   function updateRadarLegend(label) {
     const legend = d3.select("#radar-chart g.legend");
+    const height = +d3.select("#radar-chart").attr("height");
+    const width = +d3.select("#radar-chart").attr("width");
+    const paddingX = 40;
+    const paddingY = 40;
     // legend.selectAll("*").remove();
     legend.selectAll('.selected').remove();
     
     legend.append("line")
       .attr('class', 'selected')
-      .attr("x1", 0)
-      .attr("y1", 15)
-      .attr("x2", 15)
-      .attr("y2", 15)
+      .attr("x1", width / 2 - paddingX)
+      .attr("y1", height - paddingY)
+      .attr("x2", width / 2 - paddingX + 10)
+      .attr("y2", height - paddingY)
       .attr("stroke", label.color)
       .attr("stroke-width", 3);
 
     legend.append("text")
       .attr('class', 'selected')
-      .attr("x", 20)
-      .attr("y", 20)
+      .attr("x", width / 2 - paddingX + 15)
+      .attr("y", height - paddingY + 5)
       .attr("fill", "white")
       .style("font-size", "12px")
       .text(label.name);
@@ -1360,19 +1417,19 @@
 
     const width = +svg.attr("width");
     const height = +svg.attr("height");
-    const margin = { top: 30, right: 20, bottom: 10, left: 100 };
+    const margin = { top: 30, right: 20, bottom: 10, left: 70 };
     const innerWidth = width - margin.left - margin.right;
     const innerHeight = height - margin.top - margin.bottom;
 
     // chart title
     svg.append("text")
-      .attr("x", (width + 30) / 2) 
+      .attr("x", width / 2) 
       .attr("y", 15)                     
       .attr("text-anchor", "middle")
       .attr("fill", "white")
       .style("font-size", "14px")
       .style("font-weight", "bold")
-      .text("Top GO-BP shared terms");
+      .text("Shared GO Terms");
 
     const tooltip = d3.select("#tooltip");
 
@@ -1423,7 +1480,7 @@
       .call(d3.axisLeft(y))
       .selectAll("text")
       .style("fill", "white")
-      .style("font-size", "12px");
+      .style("font-size", "10px");
   }
 
 
@@ -1551,6 +1608,10 @@
     highlightLinks.clear();
     updateHighlight();
 
+    const labelDiv = document.getElementById('selected-node-label');
+    if (labelDiv) {
+        labelDiv.remove();
+    }
   }
 
   function toggleInfoBody() {
@@ -1666,9 +1727,8 @@
     const svg = d3.select("#radar-chart");
     const width = +svg.attr("width");
     const height = +svg.attr("height");
-    const radius = 60;
-    const paddingX = 30;
-    const centerX = width / 2 + paddingX;
+    const radius = 50;
+    const centerX = width / 2;
     const centerY = height / 2;
 
     const angleSlice = (2 * Math.PI) / scoreFields.length;
@@ -1885,8 +1945,10 @@
   // folder3.add({ 'Show Link Width': toggleLinkWidth }, 'Show Link Width');
   folder3.add({ 'Show Node Neighbors': showNodeNeighbors }, 'Show Node Neighbors');
   // folder3.add({ 'Load File': startDataLoad }, 'Load File');
-  // folder3.add({ 'Pause/Resume Data Reload': pauseResumeDataLoad }, 'Pause/Resume Data Reload');
+  folder3.add({ 'Pause/Resume Data Reload': pauseResumeDataLoad }, 'Pause/Resume Data Reload');
   folder3.open()
+
+  folder5.add(settings, 'EdgeColor', ['Confidence', 'Validation']).onChange(updateLinkColor)
   
   folder5.add(settings, 'Layout', ['Force-Directed', 'Spherical']).onChange(val => {
     if (layerController) {

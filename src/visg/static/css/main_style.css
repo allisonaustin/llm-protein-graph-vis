@@ -107,12 +107,28 @@ div.dg.ac{
     gap: 0.5rem;
 }
 
+.card-body {
+  resize: vertical; 
+  max-height: 500px; 
+  overflow-y: auto;
+}
+
 .legend-item {
     display: flex;
     align-items: center;
     margin-bottom: 5px;
     border-radius: 2px;
     transition: background-color 0.2s;
+}
+
+.node-label {
+  position: fixed;
+  background: rgba(0,0,0,0.7);
+  color: white;
+  padding: 4px 6px;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 1000;
 }
 
 .legend-item:hover {
@@ -191,6 +207,7 @@ div.dg.ac{
 #table-container {
   background-color: #f8f9fa;
   color: black;
+  height: 300px;
 }
 
 .collapse-body {
