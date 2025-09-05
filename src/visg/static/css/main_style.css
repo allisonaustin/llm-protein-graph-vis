@@ -59,12 +59,29 @@ div.scene-nav-info{
     font-size: medium;
 }
 
-div.dg{
+div.dg {
+    width: 300px !important;  
     font-size: medium;
 }
-div.dg.ac{
-    top: 70px;
-    z-index: 2 !important;
+
+div.dg.ac {
+    z-index: 2000 !important;
+}
+
+div.dg .cr {
+    width: 100% !important;
+    box-sizing: border-box;
+}
+
+div.dg .cr:not(.has-select) .property-name {
+    width: 170px !important;  
+    white-space: nowrap;
+    overflow: hidden;         
+    text-overflow: ellipsis;   
+}
+
+div.dg .cr:not(.has-select) .c {
+    width: calc(100% - 200px) !important;
 }
 
 #protein-info-container {
@@ -231,4 +248,20 @@ div.dg.ac{
 
 .card-header.collapsed .chevron-icon {
   transform: rotate(-90deg);
+}
+
+#gui-container { 
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.graph-help {
+  font-size: 20px;
+  color: #ccc;  
+  cursor: pointer;
+}
+
+.graph-help:hover {
+  color: white;
 }

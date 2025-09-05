@@ -46,10 +46,29 @@
   <p id="stats"><i></i></p>
 </div>
 <div id="3d-graph" style="position: fixed;"></div>
+<div id="gui-container" style="position: fixed; top: 70px; right: 20px;">
+  <div id="graph-help" class="graph-help">
+    <i class="bi bi-question-circle-fill"></i>
+  </div>
 
-<div id="protein-frame-container">
-  
+  <!-- Tooltip div -->
+  <div id="graph-tooltip" style="
+      position: fixed;
+      background: rgba(0,0,0,0.8);
+      color: white;
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      pointer-events: none;
+      z-index: 1000;
+      display: none;
+      max-width: 250px;
+  ">
+    Drag to rotate. Scroll to zoom. Hover nodes for details. Click nodes to highlight neighbors.
+  </div>
 </div>
+
+<div id="protein-frame-container"></div>
 
 <svg id="modal-connectors"
      style="
@@ -84,7 +103,7 @@
       <div id="collapse-hist" class="collapse">
         <div class="card-body p-2">
           <div style="width: 100%;">
-            <svg id="score-histogram" width="320" height="120"></svg>
+            <svg id="score-histogram" width="340" height="120"></svg>
           </div>
 
           <!-- Radar and term charts side by side -->
@@ -255,6 +274,20 @@
         chevron.classList.add('bi-chevron-right');
       }
     });
+  });
+
+  const helpIcon = document.getElementById('graph-help');
+  const tooltip = document.getElementById('graph-tooltip');
+
+  helpIcon.addEventListener('mouseenter', (e) => {
+    tooltip.style.display = 'block';
+    const rect = helpIcon.getBoundingClientRect();
+    tooltip.style.top = `${rect.bottom + 5}px`;
+    tooltip.style.left = `${rect.left - 100}px`;
+  });
+
+  helpIcon.addEventListener('mouseleave', () => {
+    tooltip.style.display = 'none';
   });
 
   function showNodeLabel(node) {
@@ -677,13 +710,12 @@
     const unverifiedLabel = `Not verified (${goPercent}%)`;
     const unverifiedController = folder6.add(activeGroups, 'Unverified').name(unverifiedLabel).onChange(updateLinkGroups);
     existingControllers['Unverified'] = unverifiedController;
-    folder6.domElement.style.width = '420px';
     folder6.open();
 
     // adding limit for graph size for user study
-    if (Graph.graphData().nodes.length >= 200 && !pauseAnimation) {
-      pauseAnimation = true;
-    }
+    // if (Graph.graphData().nodes.length >= 200 && !pauseAnimation) {
+    //   pauseAnimation = true;
+    // }
 
     Graph.graphData(result);
     if (currLayout === 'Spherical') {
@@ -1614,7 +1646,7 @@
     }
   }
 
-  function toggleInfoBody() {
+  function toggleInfoBody(event) {
     const container = document.getElementById('protein-info-container');
     const body = document.getElementById('info-body');
     const btn = event.target;
@@ -1917,6 +1949,9 @@
   // set up vis for GUI
   const settings = new Settings();
   const gui = new dat.GUI();
+
+  const guiContainer = document.getElementById('gui-container') || document.body;
+  guiContainer.appendChild(gui.domElement);
 
   // var folder2 = gui.addFolder('Sparse Layout Settings');
   // const controllerTwo = folder2.add(settings, 'MinLinks', 0, 20000);
