@@ -78,6 +78,22 @@ div.dg .cr.dropdown-controller .property-name {
   width: 120px !important;
 }
 
+div.dg .cr.has-slider .c {
+    width: calc(100% - 100px);
+}
+
+div.dg .cr.has-slider .property-name {
+  width: 100px !important;
+}
+
+div.dg .cr.has-slider .slider {
+  width: 70px;
+}
+
+div.dg .cr.has-slider input[type="text"] {   
+  font-size: 14px;      
+}
+
 #protein-info-container {
   width: 25rem; 
   height: 89vh; 

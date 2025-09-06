@@ -1242,17 +1242,8 @@
       .text("Frequency")
       .style('font-size', '12px')
       .style("fill", "white");
-    
+  
     // chart title
-    // svg.append("text")
-    //   .attr("x", (width) / 2) 
-    //   .attr("y", 15)                     
-    //   .attr("text-anchor", "middle")
-    //   .attr("fill", "white")
-    //   .style("font-size", "14px")
-    //   .style("font-weight", "bold")
-    //   .text("Reliability Score Distribution");
-
     const titleGroup = svg.append("g")
       .attr("transform", `translate(${(+svg.attr("width") / 2) - 20}, 15)`);
 
@@ -1265,7 +1256,7 @@
       .text("Reliability Score Distribution");
 
     const infoIcon = titleGroup.append("g")
-      .attr("transform", "translate(110, -5)") 
+      .attr("transform", "translate(105, -5)") 
       .style("cursor", "pointer");
 
     infoIcon.append("circle")
@@ -1540,7 +1531,7 @@
     const innerHeight = height - margin.top - margin.bottom;
 
     const titleGroup = svg.append("g")
-      .attr("transform", `translate(${(+svg.attr("width") / 2)}, 15)`);
+      .attr("transform", `translate(${(+svg.attr("width") / 2) - 10}, 15)`);
 
     // add title
     titleGroup.append("text")
