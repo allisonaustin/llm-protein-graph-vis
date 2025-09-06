@@ -19,11 +19,13 @@
 
   <script src="{{ url_for('static', filename='js/d3.v7.js')}}"></script>
 
-  <script src="//unpkg.com/three"></script>
+  <!-- <script src="//unpkg.com/three"></script> -->
+  <script src="https://unpkg.com/three@0.150.1/build/three.min.js"></script>
   <script src="//unpkg.com/dat.gui"></script>
   <script src="//unpkg.com/d3-octree"></script>
   <script src="//unpkg.com/d3-force-3d"></script>
   <script src="//unpkg.com/3d-force-graph"></script>
+  <script src="https://unpkg.com/three-spritetext@1.8.1"></script>
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -41,30 +43,28 @@
   <script type="text/javascript" src="/static/js/my_utils.js"></script>
 </head>
 <body>
-<div id="main-title-container">
+
+<div id="main-title-container" style="display:flex; align-items:center; gap:10px;">
   <h4 id="title">Explainable PPI Network</h4>
-  <p id="stats"><i></i></p>
+  <button id="play-pause-btn" class="btn btn-sm btn-dark">
+    <i id="play-pause-icon" class="bi bi-pause-circle-fill"></i>
+  </button>
+  <button id="export-btn" class="btn btn-sm btn-dark">
+    <i class="bi bi-download"></i>
+  </button>
+  <p id="stats" style="margin-left: 10px;"><i></i></p>
 </div>
+
 <div id="3d-graph" style="position: fixed;"></div>
 <div id="gui-container" style="position: fixed; top: 70px; right: 20px;">
-  <div id="graph-help" class="graph-help">
+  <div id="graph-help" class="help-icon">
     <i class="bi bi-question-circle-fill"></i>
   </div>
-
-  <!-- Tooltip div -->
-  <div id="graph-tooltip" style="
-      position: fixed;
-      background: rgba(0,0,0,0.8);
-      color: white;
-      padding: 6px 10px;
-      border-radius: 4px;
-      font-size: 12px;
-      pointer-events: none;
-      z-index: 1000;
-      display: none;
-      max-width: 250px;
-  ">
-    Drag to rotate. Scroll to zoom. Hover nodes for details. Click nodes to highlight neighbors.
+  <div class="help-tooltip">
+    Click and drag to rotate. <br>
+    Scroll to zoom. <br>
+    Hover nodes for details. <br>
+    Click nodes to highlight neighbors.
   </div>
 </div>
 
@@ -88,56 +88,68 @@
 
 <div id="protein-info-container" 
     class="card bg-dark text-white position-fixed bottom-0 start-0 m-4 shadow">
-  <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center" id="info-tab-header">
+  <div id="info-tab-header" class="tab-header">
     <span>Protein Graph Info</span>
-    <button class="btn btn-sm btn-outline-light" onclick="toggleInfoBody()">—</button>
+    <button class="btn btn btn-outline-light" onclick="toggleInfoBody(event)">-</button>
   </div>
 
   <div id="info-body">
     <!-- Interaction score distribution -->
-    <div class="card bg-dark text-white shadow">
-      <div class="card-header bg-secondary text-white collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-hist">
-        <span>Overall Network Stats</span>
-         <i class="chevron-icon bi bi-chevron-right"></i>
-      </div>
-      <div id="collapse-hist" class="collapse">
-        <div class="card-body p-2">
-          <div style="width: 100%;">
-            <svg id="score-histogram" width="340" height="120"></svg>
-          </div>
+    <div class="card-header collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-hist">
+      <span>Network Overview</span>
+        <i class="chevron-icon bi bi-chevron-right"></i>
+    </div>
+    <div id="collapse-hist" class="collapse">
+      <div class="card-body p-2">
+        <div style="width: 100%;">
+          <svg id="score-histogram" width="340" height="120"></svg>
+        </div>
 
-          <!-- Radar and term charts side by side -->
-          <div style="display: flex; flex-direction: row; gap: 10px; width: 100%;">
-            <svg id="radar-chart" width="180" height="160"></svg>
-            <svg id="term-chart" width="140" height="160"></svg>
-          </div>
+        <!-- Radar and term charts side by side -->
+        <div style="display: flex; flex-direction: row; gap: 10px; width: 100%;">
+          <svg id="radar-chart" width="180" height="160"></svg>
+          <svg id="term-chart" width="140" height="160"></svg>
         </div>
       </div>
     </div>
   
     <!-- Chat -->
-    <div class="card-header bg-secondary text-white collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-chat">
+    <div class="card-header collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-chat">
       <span>Chat</span>
        <i class="chevron-icon bi bi-chevron-right"></i>
     </div>
     <div id="collapse-chat" class="collapse">
       <div id="chat-history" class="card-body overflow-auto" style="height: 120px; font-size: 0.9rem;"></div>
       <div class="card-footer d-flex p-2 bg-dark">
+          <div id="chat-help" class="help-icon" data-bs-toggle="tooltip" data-bs-placement="top">
+          <i class="bi bi-question-circle-fill"></i>
+        </div>
+        <div class="help-tooltip">This chat allows you to interact with an AI assistant.</div>
         <input type="text" id="chat-input" class="form-control me-2 bg-secondary text-white border-0" placeholder="Type a question...">
-        <button class="btn btn-outline-light" onclick="sendChat()">Send</button>
+        <button class="btn btn-sm btn-outline-light" onclick="sendChat()">Send</button>
       </div>
     </div>
 
     <!-- Graph Tables -->
-     <div class="card-header bg-secondary text-white collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-table">
+     <div class="card-header collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-table">
       <span>Network Details</span>
        <i class="chevron-icon bi bi-chevron-down"></i>
     </div>
     <div id="collapse-table" class="collapse show">
-        <div id="table-tabs" style="margin-bottom: 8px;">
-          <button id="tab-nodes" class="active-tab">Nodes</button>
-          <button id="tab-links">Links</button>
+      <div id="table-tabs" style="margin-bottom: 8px;">
+        <div id="table-help" class="help-icon" data-bs-toggle="tooltip" data-bs-placement="top"> 
+          <i class="bi bi-question-circle-fill"></i>
+          <div id="table-tooltip" class="help-tooltip">
+            Use the tabs to switch between tables. <br>
+            Use the search box to filter results from any column. <br>
+            Use "" around search for exact match <br>
+            Click on a row to show location in graph. <br>
+            Use vertical and horizontal scroll to explore all results.
+          </div>
         </div>
+        <button id="tab-nodes" style="height: 30px;" class="active-tab">Nodes</button>
+        <button id="tab-links" style="height: 30px;">Links</button>
+      </div>
 
         <!-- Container for tables -->
         <div id="table-container">
@@ -158,7 +170,7 @@
 <div id ="logo-images" style="visibility:visible;">
   <div id="legend-confidence" class='edge-legend' style="position: fixed; z-index: 10; right: 40px; bottom: 35px; text-align: center;">
     <strong>Reliability Score</strong>
-    <div style="width: 250px; height: 15px; background: linear-gradient(to right, var(--low-confidence), var(--high-confidence)); border: 1px solid #ccc;"></div>
+    <div style="width: 150px; height: 15px; background: linear-gradient(to right, var(--low-confidence), var(--high-confidence)); border: 1px solid #ccc;"></div>
     <div style="display: flex; justify-content: space-between; font-size: 12px; color: white;">
       <span>Low (0.0)</span>
       <span>High (1.0)</span>
@@ -169,12 +181,12 @@
     <strong>Validation Source</strong>
     <div style="display: flex; justify-content: space-evenly; margin-top: 4px;">
       <div style="display: flex; align-items: center; gap: 5px;">
-        <span style="width: 20px; height: 10px; background: #40B0A6; display: inline-block; border: 1px solid #ccc;"></span>
+        <span style="width: 10px; height: 10px; background: #40B0A6; display: inline-block; border: 1px solid #ccc;"></span>
         <span style="color: white; font-size: 12px;">STRING</span>
       </div>
       <div style="display: flex; align-items: center; gap: 5px;">
-        <span style="width: 20px; height: 10px; background: #E1BE6A; display: inline-block; border: 1px solid #ccc;"></span>
-        <span style="color: white; font-size: 12px;">GO-BP</span>
+        <span style="width: 10px; height: 10px; background: #E1BE6A; display: inline-block; border: 1px solid #ccc;"></span>
+        <span style="color: white; font-size: 12px;">GO</span>
       </div>
     </div>
   </div>
@@ -213,6 +225,7 @@
   let hoverNodes = new Set(); // selected (red) nodes
   let hoverNode = null; // single selected (red) node
   let focusNode = null;
+  let labelDiv = document.getElementById('selected-node-label');
   let showLinkParticle = false;
   let showNeighbors = false;
   let enableNodeDragging = false;
@@ -276,35 +289,28 @@
     });
   });
 
-  const helpIcon = document.getElementById('graph-help');
-  const tooltip = document.getElementById('graph-tooltip');
+  const helpIcons = document.querySelectorAll('.help-icon');
 
-  helpIcon.addEventListener('mouseenter', (e) => {
-    tooltip.style.display = 'block';
-    const rect = helpIcon.getBoundingClientRect();
-    tooltip.style.top = `${rect.bottom + 5}px`;
-    tooltip.style.left = `${rect.left - 100}px`;
+  helpIcons.forEach(icon => {
+    const tooltip = icon.querySelector('.help-tooltip') || icon.nextElementSibling;
+    icon.addEventListener('mouseenter', () => {
+      tooltip.style.display = 'block';
+      const rect = icon.getBoundingClientRect();
+
+      let top = rect.bottom + 5;
+      let left = rect.left + rect.width / 2 - tooltip.offsetWidth / 2;
+
+      left = Math.max(5, Math.min(left, window.innerWidth - tooltip.offsetWidth - 5));
+      top = Math.max(5, Math.min(top, window.innerHeight - tooltip.offsetHeight - 5));
+
+      tooltip.style.top = `${top}px`;
+      tooltip.style.left = `${left}px`;
+    });
+
+    icon.addEventListener('mouseleave', () => {
+      tooltip.style.display = 'none';
+    });
   });
-
-  helpIcon.addEventListener('mouseleave', () => {
-    tooltip.style.display = 'none';
-  });
-
-  function showNodeLabel(node) {
-    let labelDiv = document.getElementById('selected-node-label');
-    if (!labelDiv) {
-      labelDiv = document.createElement('div');
-      labelDiv.id = 'selected-node-label';
-      labelDiv.className = 'node-label';
-      document.body.appendChild(labelDiv);
-    }
-    labelDiv.innerHTML = `${node.id}`;
-    const screenCoords = Graph.graph2ScreenCoords(node.x, node.y, node.z);
-    labelDiv.style.left = `${screenCoords.x + 10}px`;
-    labelDiv.style.top = `${screenCoords.y + 10}px`;
-  }
-
-
   const Graph = ForceGraph3D()(elem)
           .backgroundColor(bckColor) //#101020
           .graphData(initData)
@@ -385,8 +391,7 @@
               hoverNode = node.id;
               showNodeLabel(node);
             } else {
-              const labelDiv = document.getElementById('selected-node-label');
-              if (labelDiv) labelDiv.remove();
+              clearNodeLabels();
               hoverNode = null;
             }
             updateHighlight();
@@ -395,7 +400,7 @@
           .onNodeRightClick((node, event) => {
             if (event) event.preventDefault(); 
             if (!node) return;
-            focusNode = node.id;
+            focusNode = node;
             showCustomContextMenu(node, event.clientX, event.clientY);
           })
           .onLinkClick(link => {
@@ -441,6 +446,26 @@
         .d3Force("charge", d3.forceManyBody().strength(-200))
         .d3Force('link');
   } 
+
+  Graph.nodeThreeObject(node => {
+    if (node.showLabel) {
+      const sprite = new SpriteText(node.id);
+      sprite.color = 'white';
+      sprite.textHeight = 8; 
+      return sprite;
+    }
+  });
+
+  function showNodeLabel(node) {
+    Graph.graphData().nodes.forEach(n => n.showLabel = false);
+    node.showLabel = true;
+    Graph.refresh(); 
+  }
+
+  function clearNodeLabels() {
+    Graph.graphData().nodes.forEach(n => n.showLabel = false);
+    Graph.refresh();
+  }
 
   function filterLinkByColor(link) {
     const linkColor = link.color || 'gray';
@@ -653,6 +678,7 @@
 
           n.links = [...n.links, ...oldLinkVals]
           n.neighbors = [...new Set([...n.neighbors, ...oldNVals.neighbors])]
+          n.showLable = false;
           oldNodes.push(n)
         }
 
@@ -700,14 +726,14 @@
     if (existingControllers.hasOwnProperty('Verified')) {
       folder6.remove(existingControllers['Verified']);
     }
-    const verifiedLabel = `Verified (${stringPercent}%)`;
+    const verifiedLabel = `In STRING (${stringPercent}%)`;
     const verifiedController = folder6.add(activeGroups, 'Verified').name(verifiedLabel).onChange(updateLinkGroups);
     existingControllers['Verified'] = verifiedController;
 
     if (existingControllers.hasOwnProperty('Unverified')) {
       folder6.remove(existingControllers['Unverified']);
     }
-    const unverifiedLabel = `Not verified (${goPercent}%)`;
+    const unverifiedLabel = `Not in STRING (${goPercent}%)`;
     const unverifiedController = folder6.add(activeGroups, 'Unverified').name(unverifiedLabel).onChange(updateLinkGroups);
     existingControllers['Unverified'] = unverifiedController;
     folder6.open();
@@ -781,7 +807,7 @@
 
   function createProteinModal() {
     if (!focusNode) return;
-    let gene = focusNode;
+    let gene = focusNode.id;
     // ---- Load protein structure ----
     getPDBIdFromGene(gene).then(structures => {
       if (!structures.length) {
@@ -1046,7 +1072,7 @@
       const source = typeof link.source === 'object' ? link.source.id : link.source;
       const target = typeof link.target === 'object' ? link.target.id : link.target;
       const confidence = link.reliability_score != null ? link.reliability_score : 0;
-      const sourceData = link.scores.ncbiTaxonId ? 'string-db' : 'GO-BP';
+      const sourceData = link.scores.ncbiTaxonId ? 'string' : 'GO';
       const sourceColor = link.scores.ncbiTaxonId ? STRING_COLOR : GO_COLOR;
       const color = colorScale(confidence);
 
@@ -1061,27 +1087,35 @@
       };
 
       let details = "-";
+      let sourceDataUrl = ``;
       if (!link.scores.ncbiTaxonId && link.scores?.top_terms) {
-        // GO-BP similarity case
+        // GO similarity case
         const topTerm = link.scores.top_terms[0]; 
         if (topTerm) {
-          details = `A: ${topTerm.go_a.id} ${topTerm.go_a.name}<br>B: ${topTerm.go_b.id} ${topTerm.go_b.name}`;
+          details = `
+            Given: <a href="https://www.ebi.ac.uk/QuickGO/term/${topTerm.go_a.id}" class="data-link" target="_blank">${topTerm.go_a.id}</a> <i class="bi bi-box-arrow-up-right" style="font-size:0.8em;"></i> ${topTerm.go_a.name}<br>
+            Pred: <a href="https://www.ebi.ac.uk/QuickGO/term/${topTerm.go_b.id}" class="data-link" target="_blank">${topTerm.go_b.id}</a> <i class="bi bi-box-arrow-up-right" style="font-size:0.8em;"></i> ${topTerm.go_b.name}
+          `;
         }
+        sourceDataUrl = `<span style="color: ${sourceColor};">${sourceData}</span>`;
       } else if (link.scores.ncbiTaxonId) {
         // STRING-db case
         const { nscore = 0, dscore = 0, pscore = 0, escore = 0, ascore = 0, tscore = 0 } = link.scores;
         const sortedScores = Object.entries({ nscore, dscore, pscore, escore, ascore, tscore })
           .sort((a, b) => b[1] - a[1])
           .slice(0, 1)
-          .map(([key, val]) => `${scoreLabels[key]}: ${val.toFixed(3)}`);
+          .map(([key, val]) => `${scoreLabels[key]}: ${val.toFixed(3)}, species: ${link.scores.ncbiTaxonId}`);
         details = sortedScores.join('<br>');
+        const taxonId = link.scores?.ncbiTaxonId || '9606'; 
+        const dataRef = `https://string-db.org/cgi/network?identifiers=${encodeURIComponent(source)}%0d${encodeURIComponent(target)}&species=${taxonId}`;
+        sourceDataUrl = `<a href="${dataRef}" class="data-link" style="color: ${sourceColor}; target="_blank">${sourceData}</a> <i class="bi bi-box-arrow-up-right" style="font-size:0.8em;"></i>`;
       }
 
       return [
         source,
         target,
         `<span style="color: ${color}; font-weight: bold;">${confidence.toFixed(3)}</span>`,
-        `<span style="color: ${sourceColor}; font-weight: bold;">${sourceData}</span>`,
+        sourceDataUrl, 
         details
       ];
     });
@@ -1180,7 +1214,7 @@
     // legend 
     const legendData = [
       { label: "string", color: STRING_COLOR },
-      { label: "GO-BP", color: GO_COLOR }
+      { label: "GO", color: GO_COLOR }
     ];
 
     const legend = svg.append("g")
@@ -1225,8 +1259,8 @@
     svg.append("text")
       .attr("text-anchor", "middle")
       .attr("transform", `rotate(-90)`)
-      .attr("x",  - (margin.top + innerHeight / 2) + 5)
-      .attr("y", 12)
+      .attr("x",  - (margin.top + innerHeight / 2) + 10)
+      .attr("y", 10)
       .text("Frequency")
       .style('font-size', '12px')
       .style("fill", "white");
@@ -1442,7 +1476,7 @@
   }
 
   function drawTermChart(links) {
-    const topTerms = getTopSharedTerms(links, 5);
+    const topTerms = getTopSharedTerms(links, 10);
 
     const svg = d3.select("#term-chart");
     svg.selectAll("*").remove(); // clear previous chart
@@ -1639,11 +1673,7 @@
     highlightNodes.clear();
     highlightLinks.clear();
     updateHighlight();
-
-    const labelDiv = document.getElementById('selected-node-label');
-    if (labelDiv) {
-        labelDiv.remove();
-    }
+    clearNodeLabels();
   }
 
   function toggleInfoBody(event) {
@@ -1653,11 +1683,11 @@
 
     if (isMinimized) {
       body.style.display = 'block';
-      container.style.height = '90vh'; 
-      btn.textContent = '—';
+      container.style.height = '89vh'; 
+      btn.textContent = '-';
     } else {
       body.style.display = 'none';
-      container.style.height = '4rem'; 
+      container.style.height = '2rem'; 
       btn.textContent = '+';
     }
 
@@ -1666,7 +1696,7 @@
 
   function searchAndFocusNode(query) {
     const node = Graph.graphData().nodes.find(n => n.id.toLowerCase() === query.toLowerCase());
-
+    
     if (node) {
       const distance = 400; // how far the camera should be from the node
       const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
@@ -1683,6 +1713,7 @@
 
       highlightNodes.clear();
       highlightLinks.clear();
+      clearNodeLabels();
 
       if (hoverNode != node) {
         highlightNodes.add(node.id);
@@ -1695,6 +1726,7 @@
         matchingLinks.forEach(link => highlightLinks.add(link));
 
         hoverNode = node.id;
+        showNodeLabel(node);
       }
       updateHighlight();
     } else {
@@ -1710,6 +1742,8 @@
 
     if (link) {
       const node = typeof link.source === 'object' ? link.source : Graph.graphData().nodes.find(n => n.id === link.source);
+      const tgtNode = typeof link.target === 'object' ? link.target : Graph.graphData().nodes.find(n => n.id === link.target);
+
       const distance = 400;
       const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
 
@@ -1723,23 +1757,7 @@
         1000
       );
 
-      // if (!link && !highlightLinks.size) return;
-
-      // if (link && !highlightLinks.has(link)) { 
-
-      //   highlightNodes.clear();
-      //   highlightLinks.clear();
-
-      //   highlightNodes.add(sourceId);
-      //   highlightNodes.add(targetId);
-      //   highlightLinks.add(link);
-
-      // }else{ // clear link directions
-      //   highlightNodes.delete(sourceId);
-      //   highlightNodes.delete(targetId);
-      //   highlightLinks.delete(link);
-      // }
-
+      clearNodeLabels();
       highlightNodes.clear();
       highlightLinks.clear();
 
@@ -1748,6 +1766,10 @@
       highlightLinks.add(link);
 
       updateHighlight();
+
+      node.showLabel = true;
+      tgtNode.showLabel = true;
+      Graph.refresh();
     }
   }
 
@@ -1813,14 +1835,12 @@
   }
 
   // pause or resume data partitions load from backend
-  const pauseResumeDataLoad = () => {
+  const playPauseBtn = document.getElementById('play-pause-btn');
+  playPauseBtn.addEventListener('click', () => {
     pauseAnimation = !pauseAnimation;
-    if (pauseAnimation) {
-      console.log('pausing data load...')
-    } else {
-      console.log('resuming data load...')
-    }
-  }
+    playPauseBtn.innerHTML = pauseAnimation ? '<i id="play-pause-icon" class="bi bi-play-circle-fill"></i>' : '<i id="play-pause-icon" class="bi bi-pause-circle-fill"></i>';
+    console.log(pauseAnimation ? 'Pausing data load...' : 'Resuming data load...');
+  });
 
   // update the node distance - disabled for large disconnected graph
   function collisionUpdate(){
@@ -1962,29 +1982,29 @@
   var layerController = null;
 
   var folder3 = gui.addFolder('GUI Buttons');
-  // var folder4 = gui.addFolder('Organisms');
   var folder6 = gui.addFolder('Edge Filtering');
   var folder5 = gui.addFolder('Settings');
 
   folder3.add({ 'Zoom to Fit': zoomToFit }, 'Zoom to Fit');
-  // var linkDir = folder3.add(settings, 'ShowLinkDirections').name('LinkDirections');
-  // linkDir.onChange(toggleLinkAnimation);
-  // var neighbors = folder3.add(settings, 'ShowNodeNeighbors').name('NodeNeighbors');
-  // neighbors.onChange(showNodeNeighbors);
   // folder3.add({ showAllLinks: () => {
   //   Graph.linkVisibility(() => true); 
   //   d3.selectAll('.legend-item').classed('selected', true);
   // }}, 'showAllLinks').name('Show All Links');
   folder3.add({ 'Clear Highlights': clearHighlights }, 'Clear Highlights');
-  folder3.add({ 'Show Link Directions': toggleLinkAnimation }, 'Show Link Directions');
+  // folder3.add({ 'Show Link Directions': toggleLinkAnimation }, 'Show Link Directions');
   // folder3.add({ 'Show Link Width': toggleLinkWidth }, 'Show Link Width');
-  folder3.add({ 'Show Node Neighbors': showNodeNeighbors }, 'Show Node Neighbors');
+  // folder3.add({ 'Show Node Neighbors': showNodeNeighbors }, 'Show Node Neighbors');
+  folder3.add(settings, 'ShowLinkDirections')
+       .name('Show Link Directions')
+       .onChange(toggleLinkAnimation);
+  folder3.add(settings, 'ShowNodeNeighbors')
+        .name('Show Node Neighbors')
+        .onChange(showNodeNeighbors);
   // folder3.add({ 'Load File': startDataLoad }, 'Load File');
-  folder3.add({ 'Pause/Resume Data Reload': pauseResumeDataLoad }, 'Pause/Resume Data Reload');
+  // folder3.add({ 'Pause/Resume Data Reload': pauseResumeDataLoad }, 'Pause/Resume Data Reload');
   folder3.open()
 
-  folder5.add(settings, 'EdgeColor', ['Confidence', 'Validation']).onChange(updateLinkColor)
-  
+  folder5.add(settings, 'EdgeColor', ['Confidence', 'Validation']).onChange(updateLinkColor);
   folder5.add(settings, 'Layout', ['Force-Directed', 'Spherical']).onChange(val => {
     if (layerController) {
       folder5.remove(layerController);
@@ -2011,6 +2031,36 @@
     }
   });
   folder5.open()
+
+  setTimeout(() => {
+    document.querySelectorAll('div.dg .cr select').forEach(sel => {
+      const cr = sel.closest('.cr');
+      if (cr) cr.classList.add('dropdown-controller');
+    });
+  }, 0);
+
+  function getGuiSettings(guiFolders) {
+    const settings = {};
+    guiFolders.forEach(folder => {
+      Object.values(folder.__controllers || {}).forEach(controller => {
+        settings[controller.property] = controller.getValue();
+      });
+      Object.values(folder.__folders || {}).forEach(subFolder => {
+        Object.assign(settings, getGuiSettings([subFolder]));
+      });
+    });
+    return settings;
+  }
+
+  const exportBtn = document.getElementById('export-btn');
+  exportBtn.addEventListener('click', () => {
+  const guiSettings = getGuiSettings([folder3, folder5, folder6]);
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(guiSettings, null, 2));
+  const dlAnchor = document.createElement('a');
+  dlAnchor.setAttribute("href", dataStr);
+  dlAnchor.setAttribute("download", "ppi_graph_settings.json");
+  dlAnchor.click();
+  });
 
   // main graph load and backend data update listener
   startDataLoad();
@@ -2044,7 +2094,7 @@
     $('#tab-links').addClass('active-tab');
     $('#tab-nodes').removeClass('active-tab');
     currTable = 'Links';
-    rebuildTable(["Protein_A", "Protein_B", "Score", "Validation", "Source"]);
+    rebuildTable(["Given", "Predicted", "Score", "Source", "Metadata"]);
     populateLinkTable(Graph.graphData().links);
   });
 

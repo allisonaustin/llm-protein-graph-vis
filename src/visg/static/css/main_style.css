@@ -19,7 +19,6 @@
   margin: 0;
   padding-right: 15px;
   width: 100%;
-  font-family: 'Lucida Grande', sans-serif;
   font-size: medium;
   font-style: italic;
   text-align: right;
@@ -28,6 +27,7 @@
 body{
     margin:0px;
     padding-top: 50px;
+    font-family:'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif
 }
 .button{
     background-color: #2C2C2C;
@@ -36,7 +36,6 @@ body{
 }
 
 #title {
-    font-family: 'Lucida Grande', sans-serif;
     text-shadow: 2px 2px 4px #000000;
     font-size:large;
     text-align: left;
@@ -47,7 +46,6 @@ body{
 }
 
 .edge-legend {
-    font-family: 'Lucida Grande', sans-serif;
     color:white;
 }
 
@@ -60,34 +58,29 @@ div.scene-nav-info{
 }
 
 div.dg {
-    width: 300px !important;  
+    width: 250px;  
     font-size: medium;
 }
 
 div.dg.ac {
-    z-index: 2000 !important;
-}
-
-div.dg .cr {
-    width: 100% !important;
-    box-sizing: border-box;
+    z-index: 2000;
 }
 
 div.dg .cr:not(.has-select) .property-name {
-    width: 170px !important;  
-    white-space: nowrap;
-    overflow: hidden;         
-    text-overflow: ellipsis;   
+    width: 200px;   
 }
 
 div.dg .cr:not(.has-select) .c {
-    width: calc(100% - 200px) !important;
+    width: calc(100% - 200px);
+}
+
+div.dg .cr.dropdown-controller .property-name {
+  width: 120px !important;
 }
 
 #protein-info-container {
-  font-family: 'Lucida Grande', sans-serif;
   width: 25rem; 
-  height: 90vh; 
+  height: 89vh; 
   z-index: 1000;
   display: flex;
   flex-direction: column;
@@ -100,10 +93,33 @@ div.dg .cr:not(.has-select) .c {
   padding: 0.5rem;
 }
 
-#info-tab-header {
-  position: sticky; 
-  top: 0; 
+.tab-header {
+  background-color: #464d56; 
+  color: #fff;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.9rem;     
+  height: 30px;       
+  line-height: 30px;    
+  align-items: center;
+  justify-content: space-between;
+  display: flex;
+  position: sticky;
+  top: 0;
   z-index: 10;
+}
+
+.card-header {
+  background-color: #464d56; 
+  color: #fff;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.9rem;     
+  height: 30px;       
+  line-height: 30px; 
+}
+
+#info-tab-header button {
+  padding: 0 0.4rem;       
+  font-size: 0.8rem;      
 }
 
 .header {
@@ -112,7 +128,6 @@ div.dg .cr:not(.has-select) .c {
   color: white;
   padding: 6px 6px;
   cursor: move;
-  font-family: 'Lucida Grande', sans-serif;
 }
 
 .card-header {
@@ -146,6 +161,7 @@ div.dg .cr:not(.has-select) .c {
   border-radius: 4px;
   pointer-events: none;
   z-index: 1000;
+  font-size: 12px;
 }
 
 .legend-item:hover {
@@ -182,7 +198,6 @@ div.dg .cr:not(.has-select) .c {
   font-size: small;
   background-color: white;
   color: black;
-  font-family: 'Lucida Grande', sans-serif;
 }
 
 .data-table tbody tr {
@@ -205,6 +220,25 @@ div.dg .cr:not(.has-select) .c {
 #data-table_filter input {
   border-radius: 4px;
   border: none;
+}
+
+#table-tabs {
+  display: flex;
+  flex-direction: row;
+  height: 30px;
+}
+
+#table-help {
+  margin-right: 225px;
+  margin-left: 10px;
+}
+
+#table-tooltip {
+  width: 350px; 
+}
+
+#play-pause-icon, #export-btn {
+  font-size: 20px;
 }
 
 #table-tabs button {
@@ -256,12 +290,42 @@ div.dg .cr:not(.has-select) .c {
   align-items: flex-end;
 }
 
-.graph-help {
+.help-icon {
   font-size: 20px;
   color: #ccc;  
   cursor: pointer;
+  margin-right: 10px;
+  margin-top: 5px;
 }
 
-.graph-help:hover {
+.help-icon:hover {
   color: white;
+}
+
+#chat-input {
+  height: 35px;
+}
+
+.help-tooltip {
+  position: fixed;
+  width: 200px;
+  background: rgba(0,0,0,0.8);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 1000;
+  display: none;
+}
+
+.data-link {
+  color: inherit;             
+  text-decoration: none;     
+  border-bottom: 1px dotted; 
+  cursor: pointer;
+}
+
+.data-link:hover {
+  border-bottom-style: solid; 
 }
