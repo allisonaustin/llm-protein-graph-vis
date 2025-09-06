@@ -60,7 +60,7 @@
   <div id="graph-help" class="help-icon">
     <i class="bi bi-question-circle-fill"></i>
   </div>
-  <div class="help-tooltip">
+  <div id="graph-tooltip" class="help-tooltip">
     Click and drag to rotate. <br>
     Scroll to zoom. <br>
     Hover nodes for details. <br>
@@ -102,7 +102,7 @@
     <div id="collapse-hist" class="collapse">
       <div class="card-body p-2">
         <div style="width: 100%;">
-          <svg id="score-histogram" width="340" height="120"></svg>
+          <svg id="score-histogram" width="350" height="120"></svg>
         </div>
 
         <!-- Radar and term charts side by side -->
@@ -289,28 +289,6 @@
     });
   });
 
-  const helpIcons = document.querySelectorAll('.help-icon');
-
-  helpIcons.forEach(icon => {
-    const tooltip = icon.querySelector('.help-tooltip') || icon.nextElementSibling;
-    icon.addEventListener('mouseenter', () => {
-      tooltip.style.display = 'block';
-      const rect = icon.getBoundingClientRect();
-
-      let top = rect.bottom + 5;
-      let left = rect.left + rect.width / 2 - tooltip.offsetWidth / 2;
-
-      left = Math.max(5, Math.min(left, window.innerWidth - tooltip.offsetWidth - 5));
-      top = Math.max(5, Math.min(top, window.innerHeight - tooltip.offsetHeight - 5));
-
-      tooltip.style.top = `${top}px`;
-      tooltip.style.left = `${left}px`;
-    });
-
-    icon.addEventListener('mouseleave', () => {
-      tooltip.style.display = 'none';
-    });
-  });
   const Graph = ForceGraph3D()(elem)
           .backgroundColor(bckColor) //#101020
           .graphData(initData)
@@ -1072,7 +1050,7 @@
       const source = typeof link.source === 'object' ? link.source.id : link.source;
       const target = typeof link.target === 'object' ? link.target.id : link.target;
       const confidence = link.reliability_score != null ? link.reliability_score : 0;
-      const sourceData = link.scores.ncbiTaxonId ? 'string' : 'GO';
+      const sourceData = link.scores.ncbiTaxonId ? 'STRING' : 'GO';
       const sourceColor = link.scores.ncbiTaxonId ? STRING_COLOR : GO_COLOR;
       const color = colorScale(confidence);
 
@@ -1129,7 +1107,7 @@
 
     const width = +svg.attr("width");
     const height = +svg.attr("height");
-    const margin = { top: 25, right: 50, bottom: 10, left: 40 };
+    const margin = { top: 25, right: 65, bottom: 10, left: 40 };
     const padding = 30;
     const innerWidth = width - margin.right;
     const innerHeight = height - margin.bottom - padding;
@@ -1213,12 +1191,12 @@
 
     // legend 
     const legendData = [
-      { label: "string", color: STRING_COLOR },
+      { label: "STRING", color: STRING_COLOR },
       { label: "GO", color: GO_COLOR }
     ];
 
     const legend = svg.append("g")
-      .attr("transform", `translate(${width - 50},${margin.top})`);
+      .attr("transform", `translate(${width - 60},${margin.top})`);
 
     legend.selectAll("rect")
       .data(legendData)
@@ -1265,29 +1243,103 @@
       .style('font-size', '12px')
       .style("fill", "white");
     
-    svg.append("text")
-      .attr("x", (width) / 2) 
-      .attr("y", 15)                     
+    // chart title
+    // svg.append("text")
+    //   .attr("x", (width) / 2) 
+    //   .attr("y", 15)                     
+    //   .attr("text-anchor", "middle")
+    //   .attr("fill", "white")
+    //   .style("font-size", "14px")
+    //   .style("font-weight", "bold")
+    //   .text("Reliability Score Distribution");
+
+    const titleGroup = svg.append("g")
+      .attr("transform", `translate(${(+svg.attr("width") / 2) - 20}, 15)`);
+
+    // add title
+    titleGroup.append("text")
       .attr("text-anchor", "middle")
       .attr("fill", "white")
       .style("font-size", "14px")
       .style("font-weight", "bold")
       .text("Reliability Score Distribution");
+
+    const infoIcon = titleGroup.append("g")
+      .attr("transform", "translate(110, -5)") 
+      .style("cursor", "pointer");
+
+    infoIcon.append("circle")
+      .attr("r", 8)
+      .attr("fill", "#555");
+
+    infoIcon.append("text")
+      .attr("text-anchor", "middle")
+      .attr("dy", "0.35em")
+      .attr("fill", "white")
+      .style("font-size", "10px")
+      .style("font-weight", "bold")
+      .text("i");
+
+    infoIcon
+      .on("mouseenter", (event) => {
+        tooltip.transition().duration(200).style("opacity", 1);
+        tooltip.html("Number of confidence score values <br> for each validation type (STRING/GO)");
+      })
+      .on("mousemove", (event) => {
+        tooltip
+          .style("left", (event.pageX + 10) + "px")
+          .style("top", (event.pageY + 10) + "px");
+      })
+      .on("mouseleave", () => {
+        tooltip.transition().duration(200).style("opacity", 0);
+      });
+
   }
 
   function drawRadarChart(links) {
     const svg = d3.select("#radar-chart");
     svg.selectAll("*").remove(); // clear previous chart
 
-    // chart title
-    svg.append("text")
-      .attr("x", +svg.attr("width") / 2) 
-      .attr("y", 15)                     
+    const titleGroup = svg.append("g")
+      .attr("transform", `translate(${+svg.attr("width") / 2}, 15)`);
+
+    // add title
+    titleGroup.append("text")
       .attr("text-anchor", "middle")
       .attr("fill", "white")
       .style("font-size", "14px")
       .style("font-weight", "bold")
       .text("STRING scores");
+
+    const infoIcon = titleGroup.append("g")
+      .attr("transform", "translate(60, -5)") 
+      .style("cursor", "pointer");
+
+    infoIcon.append("circle")
+      .attr("r", 8)
+      .attr("fill", "#555");
+
+    infoIcon.append("text")
+      .attr("text-anchor", "middle")
+      .attr("dy", "0.35em")
+      .attr("fill", "white")
+      .style("font-size", "10px")
+      .style("font-weight", "bold")
+      .text("i");
+
+    infoIcon
+      .on("mouseenter", (event) => {
+        tooltip.transition().duration(200).style("opacity", 1);
+        tooltip.html("How likely STRING judges an <br> interaction to be true,<br>given the available evidence");
+      })
+      .on("mousemove", (event) => {
+        tooltip
+          .style("left", (event.pageX + 10) + "px")
+          .style("top", (event.pageY + 10) + "px");
+      })
+      .on("mouseleave", () => {
+        tooltip.transition().duration(200).style("opacity", 0);
+      });
 
     const legendGroup = svg.select("g.legend");
     if (legendGroup.empty()) {
@@ -1487,15 +1539,46 @@
     const innerWidth = width - margin.left - margin.right;
     const innerHeight = height - margin.top - margin.bottom;
 
-    // chart title
-    svg.append("text")
-      .attr("x", width / 2) 
-      .attr("y", 15)                     
+    const titleGroup = svg.append("g")
+      .attr("transform", `translate(${(+svg.attr("width") / 2)}, 15)`);
+
+    // add title
+    titleGroup.append("text")
       .attr("text-anchor", "middle")
       .attr("fill", "white")
       .style("font-size", "14px")
       .style("font-weight", "bold")
       .text("Shared GO Terms");
+
+    const infoIcon = titleGroup.append("g")
+      .attr("transform", "translate(70, -5)") 
+      .style("cursor", "pointer");
+
+    infoIcon.append("circle")
+      .attr("r", 8)
+      .attr("fill", "#555");
+
+    infoIcon.append("text")
+      .attr("text-anchor", "middle")
+      .attr("dy", "0.35em")
+      .attr("fill", "white")
+      .style("font-size", "10px")
+      .style("font-weight", "bold")
+      .text("i");
+
+    infoIcon
+      .on("mouseenter", (event) => {
+        tooltip.transition().duration(200).style("opacity", 1);
+        tooltip.html("Top 10 GO Biological Processes (BPs) <br> across all predicted proteins");
+      })
+      .on("mousemove", (event) => {
+        tooltip
+          .style("left", (event.pageX + 10) + "px")
+          .style("top", (event.pageY + 10) + "px");
+      })
+      .on("mouseleave", () => {
+        tooltip.transition().duration(200).style("opacity", 0);
+      });
 
     const tooltip = d3.select("#tooltip");
 
@@ -2096,6 +2179,29 @@
     currTable = 'Links';
     rebuildTable(["Given", "Predicted", "Score", "Source", "Metadata"]);
     populateLinkTable(Graph.graphData().links);
+  });
+
+  const helpIcons = document.querySelectorAll('.help-icon');
+
+  helpIcons.forEach(icon => {
+    const tooltip = icon.querySelector('.help-tooltip') || icon.nextElementSibling;
+    icon.addEventListener('mouseenter', () => {
+      tooltip.style.display = 'block';
+      const rect = icon.getBoundingClientRect();
+
+      let top = rect.bottom + 5;
+      let left = rect.left + rect.width / 2 - tooltip.offsetWidth / 2;
+
+      left = Math.max(5, Math.min(left, window.innerWidth - tooltip.offsetWidth - 5));
+      top = Math.max(5, Math.min(top, window.innerHeight - tooltip.offsetHeight - 5));
+
+      tooltip.style.top = `${top}px`;
+      tooltip.style.left = `${left}px`;
+    });
+
+    icon.addEventListener('mouseleave', () => {
+      tooltip.style.display = 'none';
+    });
   });
 
 </script>
