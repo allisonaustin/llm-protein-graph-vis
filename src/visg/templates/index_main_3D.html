@@ -64,7 +64,8 @@
     Click and drag to rotate. <br>
     Scroll to zoom. <br>
     Hover nodes for details. <br>
-    Click nodes to highlight neighbors.
+    Click nodes to highlight neighbors. <br>
+    Press H to hide/show the controls.
   </div>
 </div>
 
@@ -147,6 +148,7 @@
             Use vertical and horizontal scroll to explore all results.
           </div>
         </div>
+        <button id="popout-table" style="height:30px;"><i class="bi bi-box-arrow-up-right" style="font-size:0.8em;"></i></button>
         <button id="tab-nodes" style="height: 30px;" class="active-tab">Nodes</button>
         <button id="tab-links" style="height: 30px;">Links</button>
       </div>
@@ -443,6 +445,14 @@
   function clearNodeLabels() {
     Graph.graphData().nodes.forEach(n => n.showLabel = false);
     Graph.refresh();
+  }
+
+  function clearSelectedLink() {
+    d3.select("#radar-chart").selectAll(".selected-link-line").remove();
+  }
+
+  function clearRadarLegend() {
+    d3.select("#radar-chart g.legend").selectAll('.selected').remove();
   }
 
   function filterLinkByColor(link) {
@@ -1042,6 +1052,9 @@
             name: `${matchedLink.source.id + " → " + matchedLink.target.id}`, 
             color: colorScale(matchedLink.reliability_score)
           });
+        } else {
+          clearSelectedLink();
+          clearRadarLegend();
         }
       }
     });
@@ -1748,6 +1761,9 @@
     highlightLinks.clear();
     updateHighlight();
     clearNodeLabels();
+
+    clearSelectedLink();
+    clearRadarLegend();
   }
 
   function toggleInfoBody(event) {
@@ -2170,6 +2186,52 @@
     currTable = 'Links';
     rebuildTable(["Given", "Predicted", "Score", "Source", "Metadata"]);
     populateLinkTable(Graph.graphData().links);
+  });
+
+  document.getElementById("popout-table").addEventListener("click", () => {
+    const tableClone = document.getElementById("data-table").cloneNode(true);
+    const win = window.open("", "TableWindow", "width=1200,height=500,resizable=yes,scrollbars=yes");
+
+    win.document.write(`
+      <html>
+        <head>
+          <title>${currTable} Table</title>
+          <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+          <style>
+            body { font-family: sans-serif; padding: 1rem; background: #f9f9f9; color: #333; }
+            table { width: 100% !important; }
+            th, td { color: #333; }
+            h4 { color: #222; }
+          </style>
+        </head>
+        <body>
+          <h4>${currTable} Table</h4>
+          <div id="popout-container" style="overflow:auto;"></div>
+        </body>
+      </html>
+    `);
+
+    win.document.close();
+
+    const container = win.document.getElementById("popout-container");
+    container.appendChild(tableClone);
+
+    const mainTable = $('#data-table').DataTable();
+    const popoutTable = $(tableClone).DataTable({
+      data: mainTable.rows({ search: 'applied' }).data().toArray(), 
+      columns: mainTable.settings().init().columns.map(c => ({ title: c.title })),
+      paging: false,
+      searching: true,
+      lengthChange: false,
+      info: false,
+      scrollX: false, 
+      autoWidth: true
+    });
+
+    if (searchQuery) {
+      popoutTable.search(searchQuery).draw();
+    }
   });
 
   const helpIcons = document.querySelectorAll('.help-icon');

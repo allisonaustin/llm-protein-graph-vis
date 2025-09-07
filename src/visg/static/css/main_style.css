@@ -63,7 +63,7 @@ div.dg {
 }
 
 div.dg.ac {
-    z-index: 2000;
+    z-index: 2000 !important;
 }
 
 div.dg .cr:not(.has-select) .property-name {
@@ -245,7 +245,7 @@ div.dg .cr.has-slider input[type="text"] {
 }
 
 #table-help {
-  margin-right: 225px;
+  margin-right: 190px;
   margin-left: 10px;
 }
 
