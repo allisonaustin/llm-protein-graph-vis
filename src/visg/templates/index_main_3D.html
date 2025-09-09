@@ -340,7 +340,7 @@
             else
               return [...highlightLinks].filter((x) => x.source.id===link.source.id && x.target.id===link.target.id).length !== 0 ? 8 : 0;
           })
-          .linkDirectionalParticleWidth(2)
+          .linkDirectionalParticleWidth(4)
           .linkWidth(link => (showLinkWidth && link.penwidth) ? link.penwidth : 0 )
           // .linkWidth(link => [...highlightLinks].filter((x) => x.source.id===link.source.id && x.target.id===link.target.id).length!==0 ? 4 : link.penwidth ? link.penwidth : 0 )
           .linkDirectionalArrowLength(2)
@@ -388,6 +388,7 @@
             if(highlightNodes.has(link.source.id) && highlightNodes.has(link.target.id)){
               highlightNodes.clear();
               highlightLinks.clear();
+              clearNodeLabels();
               updateHighlight();
               d3.select("#radar-chart").selectAll(".selected-link-line").remove();
               d3.select("#radar-chart g.legend").selectAll('.selected').remove();
@@ -396,11 +397,18 @@
 
             highlightNodes.clear();
             highlightLinks.clear();
+            clearNodeLabels();
 
             if (link && !highlightNodes.has(link.source.id) && !highlightNodes.has(link.target.id)) {
               highlightLinks.add(link);
               highlightNodes.add(link.source.id);
               highlightNodes.add(link.target.id);
+
+              const srcNode = Graph.graphData().nodes.find(n => n.id === link.source.id);
+              const tgtNode = Graph.graphData().nodes.find(n => n.id === link.target.id);
+
+              srcNode.showLabel = true;
+              tgtNode.showLabel = true;
 
               if (link.scores.ncbiTaxonId !== undefined) {
                 plotSelectedLink(link);
@@ -410,6 +418,7 @@
                 });
               }
             }
+            Graph.refresh();
             updateHighlight();
           });
 

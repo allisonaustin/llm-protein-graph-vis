@@ -112,8 +112,7 @@ div.dg .cr.has-slider input[type="text"] {
 .tab-header {
   background-color: #464d56; 
   color: #fff;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.9rem;     
+  padding: 0.25rem 0.5rem; 
   height: 30px;       
   line-height: 30px;    
   align-items: center;
@@ -127,8 +126,7 @@ div.dg .cr.has-slider input[type="text"] {
 .card-header {
   background-color: #464d56; 
   color: #fff;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.9rem;     
+  padding: 0.25rem 0.5rem;   
   height: 30px;       
   line-height: 30px; 
 }
