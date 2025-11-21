@@ -95,7 +95,7 @@ div.dg .cr.has-slider input[type="text"] {
 }
 
 #protein-info-container {
-  width: 25rem; 
+  width: 30rem; 
   height: 89vh; 
   z-index: 1000;
   display: flex;

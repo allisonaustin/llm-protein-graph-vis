@@ -171,7 +171,7 @@
 
 <div id ="logo-images" style="visibility:visible;">
   <div id="legend-confidence" class='edge-legend' style="position: fixed; z-index: 10; right: 40px; bottom: 35px; text-align: center;">
-    <strong>Reliability Score</strong>
+    <strong>Prediction Score</strong>
     <div style="width: 150px; height: 15px; background: linear-gradient(to right, var(--low-confidence), var(--high-confidence)); border: 1px solid #ccc;"></div>
     <div style="display: flex; justify-content: space-between; font-size: 12px; color: white;">
       <span>Low (0.0)</span>
@@ -245,7 +245,7 @@
   var searchQuery = null;
   var currLayout = 'Force-Directed';
   var numLayers = 4; // for concentric spherical layout
-  var edgeColor = 'Reliability'; // default edge color
+  var edgeColor = 'Prediction'; // default edge color
   var isMinimized = false;
   var activeLink = null;
   var activeLinks = new Set(['red', 'orange', 'blue', 'green', 'gray']); // for custom edge coloring
@@ -332,7 +332,7 @@
           })
           .nodeVal(node => (node.neighbors.length > 20 && node.neighbors.length < 30) ? 2 : (node.neighbors.length >= 30) ? 3 : 1)
           .nodeResolution(20)
-          .linkColor(link => link.reliability_score ? colorScale(link.reliability_score) : 'gray')
+          .linkColor(link => link.score ? colorScale(link.score) : 'gray')
           .linkOpacity(1)
           .linkDirectionalParticles(link => {
             if(showLinkParticle)
@@ -410,11 +410,11 @@
               srcNode.showLabel = true;
               tgtNode.showLabel = true;
 
-              if (link.scores.ncbiTaxonId !== undefined) {
+              if (link.type == "STRING") {
                 plotSelectedLink(link);
                 updateRadarLegend({ 
                   name: `${link.source.id + "→" + link.target.id}`, 
-                  color: colorScale(link.reliability_score)
+                  color: colorScale(link.score)
                 });
               }
             }
@@ -508,7 +508,7 @@
     const confidenceLegend = document.getElementById('legend-confidence');
     const validationLegend = document.getElementById('legend-validation');
 
-    if (settings.EdgeColor === 'Reliability') {
+    if (settings.EdgeColor === 'Prediction') {
       confidenceLegend.style.display = 'block';
       validationLegend.style.display = 'none';
     } else if (settings.EdgeColor == 'Validation') {
@@ -517,10 +517,10 @@
     } 
 
     Graph.linkColor(link => {
-      if (settings.EdgeColor == 'Reliability') {
-        return colorScale(link.reliability_score);
+      if (settings.EdgeColor == 'Prediction') {
+        return colorScale(link.score);
       } else if (settings.EdgeColor == 'Validation') {
-        return link.scores.ncbiTaxonId ? STRING_COLOR : GO_COLOR;
+        return link.type == "STRING" ? STRING_COLOR : GO_COLOR;
       }
     })
     Graph.refresh && Graph.refresh();
@@ -570,7 +570,6 @@
   // reset Graph
   function resetGraph(){
     Graph.graphData(initData)
-
   }
 
   function rebuildTable(columns) {
@@ -710,7 +709,7 @@
     let totalLinks = dataPart.links.length;
 
     dataPart.links.forEach(link => {
-      if (link.scores && link.scores.ncbiTaxonId == undefined) {
+      if (link.scores && link.type != "STRING") {
         unverifiedCount++;
       } else {
         verifiedCount++; 
@@ -723,14 +722,14 @@
     if (existingControllers.hasOwnProperty('Verified')) {
       folder6.remove(existingControllers['Verified']);
     }
-    const verifiedLabel = `In STRING (${stringPercent}%)`;
+    const verifiedLabel = `Verified (${stringPercent}%)`;
     const verifiedController = folder6.add(activeGroups, 'Verified').name(verifiedLabel).onChange(updateLinkGroups);
     existingControllers['Verified'] = verifiedController;
 
     if (existingControllers.hasOwnProperty('Unverified')) {
       folder6.remove(existingControllers['Unverified']);
     }
-    const unverifiedLabel = `Not in STRING (${goPercent}%)`;
+    const unverifiedLabel = `Not verified (${goPercent}%)`;
     const unverifiedController = folder6.add(activeGroups, 'Unverified').name(unverifiedLabel).onChange(updateLinkGroups);
     existingControllers['Unverified'] = unverifiedController;
     folder6.open();
@@ -1055,11 +1054,11 @@
           return (src === sourceId && tgt === targetId);
         });
 
-        if (matchedLink && matchedLink.scores.ncbiTaxonId !== undefined) {
+        if (matchedLink && matchedLink.type == "STRING") {
           plotSelectedLink(matchedLink);
           updateRadarLegend({ 
             name: `${matchedLink.source.id + " → " + matchedLink.target.id}`, 
-            color: colorScale(matchedLink.reliability_score)
+            color: colorScale(matchedLink.score)
           });
         } else {
           clearSelectedLink();
@@ -1071,43 +1070,51 @@
     const data = links.map(link => {
       const source = typeof link.source === 'object' ? link.source.id : link.source;
       const target = typeof link.target === 'object' ? link.target.id : link.target;
-      const confidence = link.reliability_score != null ? link.reliability_score : 0;
-      const sourceData = link.scores.ncbiTaxonId ? 'STRING' : 'GO';
-      const sourceColor = link.scores.ncbiTaxonId ? STRING_COLOR : GO_COLOR;
+      const confidence = link.score != null ? link.score : 0;
+      const sourceData = link.type === "STRING" ? 'STRING' : 'GO';
+      const sourceColor = link.type === "STRING" ? STRING_COLOR : GO_COLOR;
       const color = colorScale(confidence);
-
-      const scoreLabels = {
-        nscore: 'Neighborhood',
-        fscore: 'Fusion',
-        pscore: 'Phylogenetic similarity',
-        ascore: 'Associations',
-        escore: 'Experiments',
-        dscore: 'Databases',
-        tscore: 'Text mining'
-      };
 
       let details = "-";
       let sourceDataUrl = ``;
-      if (!link.scores.ncbiTaxonId && link.scores?.top_terms) {
-        // GO similarity case
-        const topTerm = link.scores.top_terms[0]; 
-        if (topTerm) {
+      if (link.type != "STRING") {
+        // GO case
+        const bpTerm = link.scores.BP_terms; 
+        if (bpTerm && !Array.isArray(bpTerm) && bpTerm.go_a && bpTerm.go_b) {
           details = `
-            Given: <a href="https://www.ebi.ac.uk/QuickGO/term/${topTerm.go_a.id}" class="data-link" target="_blank" rel="noopener noreferrer">${topTerm.go_a.id}</a> <i class="bi bi-box-arrow-up-right" style="font-size:0.8em;"></i> ${topTerm.go_a.name}<br>
-            Pred: <a href="https://www.ebi.ac.uk/QuickGO/term/${topTerm.go_b.id}" class="data-link" target="_blank" rel="noopener noreferrer">${topTerm.go_b.id}</a> <i class="bi bi-box-arrow-up-right" style="font-size:0.8em;"></i> ${topTerm.go_b.name}
+            Given: <a href="https://www.ebi.ac.uk/QuickGO/term/${bpTerm.go_a.id}" class="data-link" target="_blank" rel="noopener noreferrer">${bpTerm.go_a.id}</a> <i class="bi bi-box-arrow-up-right" style="font-size:0.8em;"></i> ${bpTerm.go_a.name}, IC: ${bpTerm.ic_go_a.toFixed(3)}<br>
+            Pred: <a href="https://www.ebi.ac.uk/QuickGO/term/${bpTerm.go_b.id}" class="data-link" target="_blank" rel="noopener noreferrer">${bpTerm.go_b.id}</a> <i class="bi bi-box-arrow-up-right" style="font-size:0.8em;"></i> ${bpTerm.go_b.name}, IC: ${bpTerm.ic_go_b.toFixed(3)}<br>
+            MICA: <a href="https://www.ebi.ac.uk/QuickGO/term/${bpTerm.mica.id}" class="data-link" target="_blank" rel="noopener noreferrer">${bpTerm.mica.id}</a> <i class="bi bi-box-arrow-up-right" style="font-size:0.8em;"></i> ${bpTerm.mica.name}, IC: ${link.score.toFixed(3)}<br>
           `;
         }
         sourceDataUrl = `<span style="color: ${sourceColor};">${sourceData}</span>`;
-      } else if (link.scores.ncbiTaxonId) {
+      } else if (link.type == "STRING") {
         // STRING-db case
-        const { nscore = 0, dscore = 0, pscore = 0, escore = 0, ascore = 0, tscore = 0 } = link.scores;
-        const sortedScores = Object.entries({ nscore, dscore, pscore, escore, ascore, tscore })
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 1)
-          .map(([key, val]) => `${scoreLabels[key]}: ${val.toFixed(3)}, species: ${link.scores.ncbiTaxonId}`);
-        details = sortedScores.join('<br>');
-        const taxonId = link.scores?.ncbiTaxonId || '9606'; 
-        const dataRef = `https://string-db.org/cgi/network?identifiers=${encodeURIComponent(source)}%0d${encodeURIComponent(target)}&species=${taxonId}`;
+        const scoreFields = ["nscore", "dscore", "pscore", "escore", "ascore", "tscore"];
+        const scoreLabels = {
+          nscore: 'Neighborhood',
+          fscore: 'Fusion',
+          pscore: 'Phylogenetic similarity',
+          ascore: 'Associations',
+          escore: 'Experiments',
+          dscore: 'Databases',
+          tscore: 'Text mining'
+        };
+
+        const perSpeciesDetails = link.scores.map(entry => {
+          const top = scoreFields
+            .map(key => [key, entry[key] ?? 0])
+            .sort((a, b) => b[1] - a[1])[0];
+
+          const [topField, topVal] = top;
+          const species = entry.ncbiTaxonId;
+
+          return `${scoreLabels[topField]}: ${topVal.toFixed(3)} (species: ${species})`;
+        });
+        
+        details = perSpeciesDetails.join("<br>");
+        let chosenSpecies = link.scores.find(s => s.ncbiTaxonId === "9606")?.ncbiTaxonId || link.scores[0].ncbiTaxonId;
+        const dataRef = `https://string-db.org/cgi/network?identifiers=${encodeURIComponent(source)}%0d${encodeURIComponent(target)}&species=${chosenSpecies}`;
         sourceDataUrl = `<a href="${dataRef}" class="data-link" style="color: ${sourceColor};" target="_blank" rel="noopener noreferrer">${sourceData}</a> <i class="bi bi-box-arrow-up-right" style="font-size:0.8em;"></i>`;
       }
 
@@ -1146,11 +1153,11 @@
     // const thresholds = x.ticks(10);
 
     const scoresString = links
-                          .filter(d => d.scores.ncbiTaxonId !== undefined)
-                          .map(d => d.reliability_score);
+                          .filter(d => d.type == "STRING")
+                          .map(d => d.score);
     const scoresGO = links
-                      .filter(d => d.scores.ncbiTaxonId == undefined)
-                      .map(d => d.reliability_score);
+                      .filter(d => d.type != "STRING")
+                      .map(d => d.score);
 
     const binsString = d3.histogram()
         .domain([0, 1])
@@ -1275,7 +1282,7 @@
       .attr("fill", "white")
       .style("font-size", "14px")
       .style("font-weight", "bold")
-      .text("Reliability Score Distribution");
+      .text("Score Distribution");
 
     const infoIcon = titleGroup.append("g")
       .attr("transform", "translate(105, -5)") 
@@ -1296,7 +1303,7 @@
     infoIcon
       .on("mouseenter", (event) => {
         tooltip.transition().duration(200).style("opacity", 1);
-        tooltip.html("Number of reliability score values <br> for each validation type (STRING/GO)");
+        tooltip.html("Number of score values <br> for each validation type (STRING/GO)");
       })
       .on("mousemove", (event) => {
         tooltip
@@ -1413,19 +1420,31 @@
     // Filter valid scores
     const validLinks = links.filter(d =>
       d &&
-      d.reliability_score !== 0 &&
-      scoreFields.some(f => d.scores[f] !== undefined)
+      d.score !== 0 &&
+      Array.isArray(d.scores) &&
+      d.scores.length > 0
     );
 
     if (validLinks.length === 0) return;
 
-    // Compute average for each field
+    function getAllScoresForField(link, field) {
+      return link.scores
+        .map(s => (s[field] !== undefined ? +s[field] : 0))
+        .filter(v => v > 0);
+    }
+
+    // Compute radar averages
     const averages = scoreFields.map(field => {
-      const values = validLinks.map(d => +d.scores[field] || 0).filter(v => v > 0);
-      const sum = values.reduce((a, b) => a + b, 0);
-      const avg = values.length ? sum / values.length : 0;
+      const allValues = validLinks.flatMap(link =>
+        getAllScoresForField(link, field)
+      );
+
+      const sum = allValues.reduce((a, b) => a + b, 0);
+      const avg = allValues.length ? sum / allValues.length : 0;
+
       return { axis: field, value: avg };
     });
+
 
     // Draw axes
     scoreFields.forEach((field, i) => {
@@ -1511,33 +1530,35 @@
   }
 
   function getTopSharedTerms(links, topN=5) {
+    // Collect all mica terms
     const terms = links
-      .filter(link => link.scores && Array.isArray(link.scores.top_terms))
-      .flatMap(link => link.scores.top_terms.map(term => ({
-        id: term.go_b.id,
-        name: term.go_b.name,
-        score: term.score
-      })));
-
-      const termMap = {};
-      terms.forEach(term => {
-        if (!termMap[term.id]) {
-          termMap[term.id] = {count: 0, totalScore: 0};
-        }
-        termMap[term.id].count += 1;
-        termMap[term.id].totalScore += term.score;
-      });
-
-      const aggregatedTerms = Object.entries(termMap).map(([id, {count, totalScore}]) => ({
-        id,
-        name: terms.find(t => t.id === id)?.name || id,
-        count,
-        avgScore: +(totalScore / count).toFixed(3)
+      .filter(link => link?.scores?.BP_terms?.mica)
+      .map(link => ({
+        id: link.scores.BP_terms.mica.id,
+        name: link.scores.BP_terms.mica.name,
+        score: link.scores.BP_terms.ic_mica   // or BP_terms.score if you prefer
       }));
 
-      return aggregatedTerms
-        .sort((a, b) => b.count - a.count)
-        .slice(0, topN);
+    const termMap = {};
+
+    terms.forEach(term => {
+      if (!termMap[term.id]) {
+        termMap[term.id] = { count: 0, totalScore: 0, name: term.name };
+      }
+      termMap[term.id].count += 1;
+      termMap[term.id].totalScore += term.score;
+    });
+
+    const aggregatedTerms = Object.entries(termMap).map(([id, v]) => ({
+      id,
+      name: v.name,
+      count: v.count,
+      avgScore: +(v.totalScore / v.count).toFixed(3)
+    }));
+
+    return aggregatedTerms
+      .sort((a, b) => b.count - a.count)
+      .slice(0, topN);
   }
 
   function drawTermChart(links) {
@@ -1553,7 +1574,7 @@
     const innerHeight = height - margin.top - margin.bottom;
 
     const titleGroup = svg.append("g")
-      .attr("transform", `translate(${(+svg.attr("width") / 2) - 10}, 15)`);
+      .attr("transform", `translate(${(+svg.attr("width") / 2)}, 15)`);
 
     // add title
     titleGroup.append("text")
@@ -1561,10 +1582,10 @@
       .attr("fill", "white")
       .style("font-size", "14px")
       .style("font-weight", "bold")
-      .text("Shared GO Terms");
+      .text("MICA GO-BPs");
 
     const infoIcon = titleGroup.append("g")
-      .attr("transform", "translate(70, -5)") 
+      .attr("transform", "translate(60, -5)") 
       .style("cursor", "pointer");
 
     infoIcon.append("circle")
@@ -1582,7 +1603,7 @@
     infoIcon
       .on("mouseenter", (event) => {
         tooltip.transition().duration(200).style("opacity", 1);
-        tooltip.html("Top 10 GO Biological Processes (BPs) <br> across all predicted proteins");
+        tooltip.html("Top 10 most informative <br> common GO Biological <br> Processes (BPs) across all <br> predicted protein pairs");
       })
       .on("mousemove", (event) => {
         tooltip
@@ -1886,7 +1907,7 @@
 
     const angleSlice = (2 * Math.PI) / scoreFields.length;
     const scale = d3.scaleLinear().domain([0, 1]).range([0, radius]);
-    const linkColor = colorScale(selectedLink.reliability_score);
+    const linkColor = colorScale(selectedLink.score);
 
     svg.selectAll(".selected-link-line").remove();
 
@@ -2015,8 +2036,8 @@
 
   
   function filterLinkByGroup(link) {
-    if (link.scores.ncbiTaxonId == undefined && activeGroups.Unverified) return true;
-    if (link.scores.ncbiTaxonId && activeGroups.Verified) return true;
+    if (link.type !== "STRING" && activeGroups.Unverified) return true;
+    if (link.type == "STRING" && activeGroups.Verified) return true;
     return false;
   }
 
@@ -2103,7 +2124,7 @@
   // folder3.add({ 'Pause/Resume Data Reload': pauseResumeDataLoad }, 'Pause/Resume Data Reload');
   folder3.open()
 
-  folder5.add(settings, 'EdgeColor', ['Reliability', 'Validation']).onChange(updateLinkColor);
+  folder5.add(settings, 'EdgeColor', ['Prediction', 'Validation']).onChange(updateLinkColor);
   folder5.add(settings, 'Layout', ['Force-Directed', 'Spherical']).onChange(val => {
     if (layerController) {
       folder5.remove(layerController);
