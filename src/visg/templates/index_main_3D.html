@@ -148,9 +148,11 @@
             Use vertical and horizontal scroll to explore all results.
           </div>
         </div>
-        <button id="popout-table" style="height:30px;"><i class="bi bi-box-arrow-up-right" style="font-size:0.8em;"></i></button>
-        <button id="tab-nodes" style="height: 30px;" class="active-tab">Nodes</button>
-        <button id="tab-links" style="height: 30px;">Links</button>
+        <div id="tabs-wrapper" style="margin-left:auto; display:flex;">
+          <button id="popout-table" style="height:30px;"><i class="bi bi-box-arrow-up-right" style="font-size:0.8em;"></i></button>
+          <button id="tab-nodes" style="height:30px;" class="active-tab">Nodes</button>
+          <button id="tab-links" style="height:30px;">Links</button>
+        </div>
       </div>
 
         <!-- Container for tables -->
@@ -256,7 +258,7 @@
     Unverified: true,
     Verified: true
   };
-  const taxonCounts = {};
+  const adjacency = {};
   let totalLinks = 0;
   // colors 
   const STRING_COLOR = "#40B0A6";
@@ -514,13 +516,18 @@
     } else if (settings.EdgeColor == 'Validation') {
       confidenceLegend.style.display = 'none';
       validationLegend.style.display = 'block';
-    } 
+    } else if (settings.EdgeColor == 'None') {
+      confidenceLegend.style.display = 'none';
+      validationLegend.style.display = 'none';
+    }
 
     Graph.linkColor(link => {
       if (settings.EdgeColor == 'Prediction') {
         return colorScale(link.score);
       } else if (settings.EdgeColor == 'Validation') {
         return link.type == "STRING" ? STRING_COLOR : GO_COLOR;
+      } else if (setting.EdgeColor == 'None') {
+        return '#f2f2f2';
       }
     })
     Graph.refresh && Graph.refresh();
@@ -603,6 +610,43 @@
       searchQuery = currTableInstance.search();
     });
   }
+
+  function getConnectedComponents(nodes, adjacency) {
+    const visited = new Set();
+    const components = [];
+    const clusterColorScale = d3.scaleOrdinal(d3.schemeCategory10);
+
+    let clusterIndex = 0;
+
+    nodes.forEach(node => {
+      if (!visited.has(node.id)) {
+        const component = [];
+        const stack = [node.id];
+
+        while (stack.length > 0) {
+          const current = stack.pop();
+          if (!visited.has(current)) {
+            visited.add(current);
+            component.push(current);
+
+            // Assign cluster color directly to node
+            const nodeObj = nodes.find(n => n.id === current);
+            if (nodeObj) {
+              nodeObj.clusterColor = clusterColorScale(clusterIndex);
+              nodeObj.clusterId = clusterIndex;
+            }
+
+            adjacency[current]?.forEach(neighbor => {
+              if (!visited.has(neighbor)) {
+                stack.push(neighbor);
+              }
+            });
+          }
+        }
+        clusterIndex += 1;
+      }
+    });
+}
 
   function assignLinkCurvature(links) {
     const linkPairs = {};
@@ -690,6 +734,16 @@
       links: links.concat(dataPart.links)//[...links, ...dataPart.links ]
     };
 
+    dataPart.links.forEach(link => {
+      const sourceId = typeof link.source === 'object' ? link.source.id : link.source
+      const targetId = typeof link.target === 'object' ? link.target.id : link.target
+      if (!adjacency[sourceId]) adjacency[sourceId] = new Set();
+      if (!adjacency[targetId]) adjacency[targetId] = new Set();
+      adjacency[sourceId].add(targetId);
+      adjacency[targetId].add(sourceId);
+    });
+
+    getConnectedComponents(result.nodes, adjacency);
     assignLinkCurvature(result.links);
 
     const nlen = result.nodes ? new Set(result.nodes).size : 0;
@@ -1012,27 +1066,39 @@
 
   function populateNodeTable(newNodes) {
     const dataTable = $('#data-table').DataTable();
+
+    // checking new cluster assignment of existing nodes
+    dataTable.rows().every(function(rowIdx, tableLoop, rowLoop) {
+        const rowData = this.data();
+        const nodeId = rowData[1]; 
+        const node = newNodes.concat(Graph.graphData().nodes).find(n => n.id === nodeId);
+        if (node) {
+            const clusterCell = `<div style="display:flex; justify-content:flex-end;"><span style="width:12px;height:16px;background-color:${node.clusterColor};"></span></div>`;            rowData[0] = clusterCell; 
+            this.data(rowData);
+        }
+    });
+
     newNodes.forEach(node => {
-      const existing = dataTable.rows().data().toArray().some(row => row[0] === node.id);
-      if (!existing) {
-        const inD = [...new Set(node.in_degree)].length;
-        const outD = [...new Set(node.out_degree)].length;
-        const totalLinks = inD + outD;
-        dataTable.row.add([node.id, totalLinks]);
-      }
+        const existing = dataTable.rows().data().toArray().some(row => row[1] === node.id);
+        if (!existing) {
+            const inD = [...new Set(node.in_degree)].length;
+            const outD = [...new Set(node.out_degree)].length;
+            const totalLinks = inD + outD;
+            const clusterCell = `<div style="display:flex; justify-content:flex-end;"><span style="width:12px;height:16px;background-color:${node.clusterColor};"></span></div>`;            dataTable.row.add([clusterCell, node.id, totalLinks]);
+        }
     });
 
     $('#data-table tbody').off('click', 'tr');
-
     $('#data-table tbody').on('click', 'tr', function () {
-      const rowData = dataTable.row(this).data();
-      if (rowData) {
-        const nodeId = rowData[0];
-        searchAndFocusNode(nodeId);  
-      }
+        const rowData = dataTable.row(this).data();
+        if (rowData) {
+            const nodeId = rowData[1];
+            searchAndFocusNode(nodeId);  
+        }
     });
     dataTable.draw();
   }
+
 
   function populateLinkTable(links) {
     const dataTable = $('#data-table').DataTable();
@@ -1042,9 +1108,9 @@
     $('#data-table tbody').on('click', 'tr', function () {
       const rowData = dataTable.row(this).data();
       if (rowData) {
-        const sourceId = rowData[0];
-        const targetId = rowData[1];
-        const sourceData = rowData[3];
+        const sourceId = rowData[1];
+        const targetId = rowData[2];
+        const sourceData = rowData[4];
         searchAndFocusLink(sourceId, targetId);
         const graphLinks = Graph.graphData().links;
         // searching for link in graph data
@@ -1075,8 +1141,14 @@
       const sourceColor = link.type === "STRING" ? STRING_COLOR : GO_COLOR;
       const color = colorScale(confidence);
 
+      const srcNode = Graph.graphData().nodes.find(n => n.id === source);
+      const clusterCell = srcNode ? `
+          <span style="width:12px;height:20px;background-color:${srcNode.clusterColor};margin-right:4px;"></span>
+          <span>${srcNode.clusterId}</span>` : '-';
+
       let details = "-";
       let sourceDataUrl = ``;
+
       if (link.type != "STRING") {
         // GO case
         const bpTerm = link.scores.BP_terms; 
@@ -1119,6 +1191,7 @@
       }
 
       return [
+        clusterCell, 
         source,
         target,
         `<span style="color: ${color}; font-weight: bold;">${confidence.toFixed(3)}</span>`,
@@ -2124,7 +2197,7 @@
   // folder3.add({ 'Pause/Resume Data Reload': pauseResumeDataLoad }, 'Pause/Resume Data Reload');
   folder3.open()
 
-  folder5.add(settings, 'EdgeColor', ['Prediction', 'Validation']).onChange(updateLinkColor);
+  folder5.add(settings, 'EdgeColor', ['Prediction', 'Validation', 'None']).onChange(updateLinkColor);
   folder5.add(settings, 'Layout', ['Force-Directed', 'Spherical']).onChange(val => {
     if (layerController) {
       folder5.remove(layerController);
@@ -2198,7 +2271,7 @@
   });
 
   // initial load of data tables
-  rebuildTable(["Protein IDs", "Link Count"]);
+  rebuildTable(["Cluster", "Protein IDs", "Link Count"]);
   currTable = 'Nodes';
 
   // tab switching
@@ -2206,7 +2279,7 @@
     $('#tab-nodes').addClass('active-tab');
     $('#tab-links').removeClass('active-tab');
     currTable = 'Nodes';
-    rebuildTable(["Protein IDs", "Link Count"]);
+    rebuildTable(["Cluster", "Protein IDs", "Link Count"]);
     populateNodeTable(Graph.graphData().nodes);
   });
 
@@ -2214,7 +2287,7 @@
     $('#tab-links').addClass('active-tab');
     $('#tab-nodes').removeClass('active-tab');
     currTable = 'Links';
-    rebuildTable(["Given", "Predicted", "Score", "Source", "Metadata"]);
+    rebuildTable(["Cluster", "Given", "Predicted", "Score", "Source", "Metadata"]);
     populateLinkTable(Graph.graphData().links);
   });
 
