@@ -35,6 +35,26 @@ body{
     color: white;
 }
 
+.minimize-btn-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 1.2rem;
+  font-weight: bold;
+  border: none;
+  background: transparent;
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center; 
+  cursor: pointer;
+  transition: color 0.2s, transform 0.2s;
+}
+
+.minimize-btn-icon:hover {
+  color: #007bff;
+  transform: scale(1.1);
+}
+
 #title {
     text-shadow: 2px 2px 4px #000000;
     font-size:large;
@@ -75,7 +95,7 @@ div.dg .cr:not(.has-select) .c {
 }
 
 div.dg .cr.dropdown-controller .property-name {
-  width: 120px !important;
+  width: 85px !important;
 }
 
 div.dg .cr.has-slider .c {
@@ -95,23 +115,33 @@ div.dg .cr.has-slider input[type="text"] {
 }
 
 #protein-info-container {
-  width: 30rem; 
-  height: 89vh; 
-  z-index: 1000;
+  width: 30rem;
+  max-height: calc(100vh - 80px);
+  margin: 10px;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  background: #212529;
+  border-radius: 8px;
+  overflow: hidden; /* hide overflowing content */
+  transition: max-height 0.3s ease; /* smooth minimize/maximize */
 }
 
 #info-body {
-  flex: 1 1 auto; 
-  overflow-y: auto; 
+  flex: 1 1 auto;
+  overflow-y: auto;
   padding: 0.5rem;
 }
 
-.tab-header {
-  background-color: #464d56; 
-  color: #fff;
+#protein-info-container.minimized {
+  max-height: 2rem; /* only show header */
+}
+
+#protein-info-container::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+#info-tab-header {
   padding: 0.25rem 0.5rem; 
   height: 30px;       
   line-height: 30px;    
@@ -124,8 +154,6 @@ div.dg .cr.has-slider input[type="text"] {
 }
 
 .card-header {
-  background-color: #464d56; 
-  color: #fff;
   padding: 0.25rem 0.5rem;   
   height: 30px;       
   line-height: 30px; 
@@ -153,10 +181,13 @@ div.dg .cr.has-slider input[type="text"] {
     gap: 0.5rem;
 }
 
-.card-body {
-  resize: vertical; 
-  max-height: 500px; 
-  overflow-y: auto;
+#chat-history {
+  resize: vertical;
+  overflow: auto;
+  padding: 12px 16px;
+  box-sizing: border-box;
+  min-height: 80px;
+  max-height: 400px;
 }
 
 .legend-item {
@@ -256,7 +287,7 @@ div.dg .cr.has-slider input[type="text"] {
 }
 
 #table-tabs button {
-  background: #444;
+  background: #b9b9b9;
   color: white;
   border: none;
   cursor: pointer;
@@ -288,6 +319,81 @@ div.dg .cr.has-slider input[type="text"] {
 
 .card-header.collapsible {
   cursor: pointer;
+}
+
+.charts-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.charts-row {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+}
+
+.charts-row.two-col .chart-frame {
+  flex: 1 1 0;
+}
+
+.charts-row.three-col .chart-frame {
+  flex: 1 1 0;
+}
+
+.chart-frame {
+  display: flex;
+  flex-direction: column;
+  background: white;
+  color: black;
+  border-radius: 4px;
+}
+
+.chart-frame svg {
+  width: 100%;
+  height: 100%;
+}
+
+.chart-header {
+  background: #f2f2f2;
+  border-bottom: 1px solid #ccc;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 14px;
+  font-weight: bold;
+  border-radius: 4px 4px 0 0;
+}
+
+.chart-info-circle {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #b9b9b9;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.chart-info:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: 20px;  /* below the icon */
+  left: 50%;
+  max-width: 100px;
+  text-align: center;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.75);
+  color: white;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  z-index: 9999;
 }
 
 .chevron-icon {
