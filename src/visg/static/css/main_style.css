@@ -22,6 +22,7 @@
   font-size: medium;
   font-style: italic;
   text-align: right;
+  flex-wrap: nowrap;
 }
 
 body{
@@ -116,20 +117,15 @@ div.dg .cr.has-slider input[type="text"] {
 
 #protein-info-container {
   width: 30rem;
+  height: calc(100vh - 80px);
   max-height: calc(100vh - 80px);
   margin: 10px;
   display: flex;
   flex-direction: column;
   background: #212529;
   border-radius: 8px;
-  overflow: hidden; /* hide overflowing content */
-  transition: max-height 0.3s ease; /* smooth minimize/maximize */
-}
-
-#info-body {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  padding: 0.5rem;
+  overflow-y: auto; 
+  transition: max-height 0.3s ease; 
 }
 
 #protein-info-container.minimized {
@@ -142,15 +138,16 @@ div.dg .cr.has-slider input[type="text"] {
 }
 
 #info-tab-header {
-  padding: 0.25rem 0.5rem; 
-  height: 30px;       
-  line-height: 30px;    
-  align-items: center;
-  justify-content: space-between;
-  display: flex;
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 30px;
+  padding: 0.25rem 0.5rem;
+  background: #343a40; /* darker so it stands out */
+  border-bottom: 1px solid #495057;
 }
 
 .card-header {
@@ -274,7 +271,7 @@ div.dg .cr.has-slider input[type="text"] {
 }
 
 #table-help {
-  margin-right: 190px;
+  margin-right: 80px;
   margin-left: 10px;
 }
 
@@ -329,16 +326,7 @@ div.dg .cr.has-slider input[type="text"] {
 
 .charts-row {
   display: flex;
-  gap: 4px;
-  width: 100%;
-}
-
-.charts-row.two-col .chart-frame {
-  flex: 1 1 0;
-}
-
-.charts-row.three-col .chart-frame {
-  flex: 1 1 0;
+  gap: 4px; 
 }
 
 .chart-frame {
@@ -347,6 +335,60 @@ div.dg .cr.has-slider input[type="text"] {
   background: white;
   color: black;
   border-radius: 4px;
+}
+
+.clusters-frame {
+  flex: 0 0 80px; 
+  max-width: 80px;
+  min-width: 80px;
+  display: flex;
+  flex-direction:column;
+  background: white;
+  color: black;
+  border-radius: 4px;
+  height: 180px;
+}
+
+#cluster-list::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.score-frame svg,
+.radar-frame svg {
+  width: 100%;
+  height: 100%;
+}
+
+.charts-row.two-col {
+  display: flex;
+  gap: 4px;
+  align-items: stretch; 
+  height: 100%;
+}
+
+.charts-row.two-col .chart-frame {
+  flex: 1 1 0; 
+  display: flex;
+  flex-direction: column; 
+}
+
+.charts-row.two-col .clusters-frame {
+  flex: 0 0 80px;  
+  display: flex;
+  flex-direction: column;
+}
+
+#cluster-list {
+  flex: 1 1 auto;         
+  overflow-y: auto; 
+  padding: 6px;
+  box-sizing: border-box;
+  min-height: 0;
+}
+
+.charts-row.three-col .chart-frame {
+  flex: 1 1 0;
 }
 
 .chart-frame svg {
