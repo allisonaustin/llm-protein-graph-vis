@@ -150,7 +150,7 @@
             <svg id="radar-chart"></svg>
           </div>
 
-          <div class="clusters-frame">
+          <div class="chart-frame clusters-frame">
             <div class="chart-header">
               <span class="chart-title">Clusters</span>
             </div>
@@ -312,6 +312,8 @@
   var myInterval = null;
   const timerV = 12000;
   const timerStep = 10800;
+  const maxDist = 50;
+  const minDist = 10;
   var currTimerStep = timerStep;
   var currTable = 'Nodes';
   var currTableInstance = null;
@@ -523,7 +525,18 @@
         .d3AlphaDecay(0.02)
         .d3VelocityDecay(0.3)
         .d3Force("charge", d3.forceManyBody().strength(-200))
-        .d3Force('link')
+        .d3Force('link',
+          d3.forceLink()
+          .id(d => d.id)
+          .distance(d => {
+            const similarity = d.similarity || 0.5;
+            return maxDist - similarity * (maxDist - minDist);
+          }
+          ).strength(s => {
+            const similarity = s.similarity || 0.5;
+            return 0.1 + similarity * 0.9;
+          })
+        );
   } 
 
   function showNodeLabel(node) {
@@ -1369,7 +1382,7 @@
         if (!term) return "-";
         if (term && !Array.isArray(term) && term.go_a && term.go_b) {
           // Max width of each bar (pixels)
-          const maxWidth = 50;
+          const maxWidth = 30;
           const givenWidth = term.ic_go_a * maxWidth;
           const predWidth  = term.ic_go_b * maxWidth;
           const micaWidth  = term.ic_mica * maxWidth;
@@ -1447,157 +1460,163 @@
 
   function drawConfidenceHistogram() {
     const svg = d3.select("#score-histogram");
-    svg.selectAll("*").remove(); // clear previous chart
 
-    const container = svg.node().parentNode;
+    const container = svg.node().closest(".chart-frame");
     const width = container.clientWidth;
-    const height = container.clientHeight; 
-    
-    const margin = { top: 20, right: 20, bottom: 10, left: 40 };
-    const padding = 30;
-    const innerWidth = width - margin.right;
-    const innerHeight = height - margin.bottom - padding;
+    const height = 120;
+
+    const margin = { top: 20, right: 20, bottom: 30, left: 40 };
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
 
     const tooltip = d3.select("#tooltip");
 
+    if (svg.select(".chart-layer").empty()) {
+      const chartG = svg.append("g")
+        .attr("class", "chart-layer")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+      chartG.append("g").attr("class", "x-axis")
+        .attr("transform", `translate(0,${innerHeight})`);
+
+      chartG.append("g").attr("class", "y-axis");
+
+      chartG.append("g").attr("class", "string-bars");
+      chartG.append("g").attr("class", "go-bars");
+
+      svg.append("text")
+        .attr("class", "y-label")
+        .attr("text-anchor", "middle")
+        .attr("transform", `rotate(-90)`)
+        .attr("x",  - (margin.top + innerHeight / 2))
+        .attr("y", 12)
+        .text("Frequency")
+        .style("font-size", "12px");
+
+      const legendData = [
+        { label: "STRING", color: STRING_COLOR },
+        { label: "GO", color: GO_COLOR }
+      ];
+
+      const legend = svg.append("g")
+        .attr("class", "legend")
+        .attr("transform", `translate(10, ${height})`);
+
+      const legendSpacing = 60;
+
+      legend.selectAll("rect")
+        .data(legendData)
+        .join("rect")
+        .attr("x", (d, i) => i * legendSpacing)
+        .attr("width", 8)
+        .attr("height", 8)
+        .attr("fill", d => d.color);
+
+      legend.selectAll("text")
+        .data(legendData)
+        .join("text")
+        .attr("x", (d, i) => i * legendSpacing + 12)
+        .attr("y", 6)
+        .style("font-size", "12px")
+        .attr("dominant-baseline", "middle")
+        .text(d => d.label);
+    }
+
     const x = d3.scaleLinear()
       .domain([0, 1])
-      .range([margin.left, innerWidth]);
+      .range([0, innerWidth]);
 
     const binCount = 10;
     const binStep = 1 / binCount;
     const thresholds = d3.range(0, 1 + binStep, binStep);
-    // const thresholds = x.ticks(10);
 
     const verifiedScores = Graph.graphData().links
-                          .filter(d => d.type == "STRING")
-                          .map(d => d.score);
+      .filter(d => d.type === "STRING")
+      .map(d => d.score);
+
     const unverifiedScores = Graph.graphData().links
-                      .filter(d => d.type != "STRING")
-                      .map(d => d.score);
+      .filter(d => d.type !== "STRING")
+      .map(d => d.score);
 
-    const binsString = d3.histogram()
-        .domain([0, 1])
-        .thresholds(thresholds)(verifiedScores);
+    const binsV = d3.histogram()
+      .domain([0, 1])
+      .thresholds(thresholds)(verifiedScores);
 
-    const binsGO = d3.histogram()
-        .domain([0, 1])
-        .thresholds(thresholds)(unverifiedScores);
+    const binsUnv = d3.histogram()
+      .domain([0, 1])
+      .thresholds(thresholds)(unverifiedScores);
 
-    const maxCount = d3.max([...binsString, ...binsGO], d => d.length);
+    const maxCount = d3.max([...binsV, ...binsUnv], d => d.length);
 
     const y = d3.scaleLinear()
       .domain([0, maxCount])
-      .range([innerHeight, margin.top]);
+      .range([innerHeight, 0]);
 
     const barWidth = (x(thresholds[1]) - x(thresholds[0])) / 2 - 1;
 
-    svg.selectAll("rect.string")
-      .data(binsString)
+    const chartG = svg.select(".chart-layer");
+
+    // update axes only — DO NOT redraw
+    chartG.select(".x-axis").call(d3.axisBottom(x).ticks(5));
+    chartG.select(".y-axis").call(d3.axisLeft(y).ticks(5));
+
+    // STRING
+    chartG.select(".string-bars")
+      .selectAll("rect")
+      .data(binsV)
       .join("rect")
-      .attr("class", "string")
       .attr("x", d => x(d.x0))
       .attr("y", d => y(d.length))
       .attr("width", barWidth)
-      .attr("height", d => y(0) - y(d.length))
+      .attr("height", d => innerHeight - y(d.length))
       .attr("fill", STRING_COLOR)
       .on("mouseover", function(event, d) {
         tooltip.style("opacity", 1)
-              .html(`Count: ${d.length}`)
-              .style("left", (event.pageX + 10) + "px")
-              .style("top", (event.pageY - 28) + "px");
-        d3.select(this).attr("fill", "#a9e8e3"); // Highlight bar
+          .html(`Count: ${d.length}`)
+          .style("left", `${event.pageX + 10}px`)
+          .style("top", `${event.pageY - 28}px`);
+
+        d3.select(this).attr("fill", "#a9e8e3");
       })
       .on("mouseout", function() {
         tooltip.style("opacity", 0);
-        d3.select(this).attr("fill", STRING_COLOR); // Reset color
-       });
+        d3.select(this).attr("fill", STRING_COLOR);
+      });
 
-    // GO bars
-    svg.selectAll("rect.go")
-      .data(binsGO)
+    // GO
+    chartG.select(".go-bars")
+      .selectAll("rect")
+      .data(binsUnv)
       .join("rect")
-      .attr("class", "go")
       .attr("x", d => x(d.x0) + barWidth + 1)
       .attr("y", d => y(d.length))
       .attr("width", barWidth)
-      .attr("height", d => y(0) - y(d.length))
+      .attr("height", d => innerHeight - y(d.length))
       .attr("fill", GO_COLOR)
       .on("mouseover", function(event, d) {
         tooltip.style("opacity", 1)
-              .html(`Count: ${d.length}`)
-              .style("left", (event.pageX + 10) + "px")
-              .style("top", (event.pageY - 28) + "px");
-        d3.select(this).attr("fill", "#f7e09e"); 
+          .html(`Count: ${d.length}`)
+          .style("left", `${event.pageX + 10}px`)
+          .style("top", `${event.pageY - 28}px`);
+
+        d3.select(this).attr("fill", "#f7e09e");
       })
       .on("mouseout", function() {
         tooltip.style("opacity", 0);
         d3.select(this).attr("fill", GO_COLOR);
       });
-
-    // legend 
-    const legendData = [
-      { label: "STRING", color: STRING_COLOR },
-      { label: "GO", color: GO_COLOR }
-    ];
-
-    const legend = svg.append("g")
-      .attr("transform", `translate(10, ${height - 10})`);
-
-    const legendSpacing = 60; 
-
-    legend.selectAll("rect")
-      .data(legendData)
-      .join("rect")
-      .attr("x", (d, i) => i * legendSpacing)
-      .attr("y", -5)
-      .attr("width", 8)
-      .attr("height", 8)
-      .attr("fill", d => d.color);
-
-    legend.selectAll("text")
-      .data(legendData)
-      .join("text")
-      .attr("x", (d, i) => i * legendSpacing + 12) 
-      .attr("y", 0) 
-      .style("font-size", "12px")
-      .attr("dominant-baseline", "middle")
-      .text(d => d.label);
-    
-    svg.append("g")
-      .attr("transform", `translate(0,${innerHeight})`)
-      .call(d3.axisBottom(x).ticks(5));
-
-    svg.append("g")
-      .attr("transform", `translate(${margin.left},0)`)
-      .call(d3.axisLeft(y).ticks(5));
-
-    // X-axis label
-    // svg.append("text")
-    //   .attr("text-anchor", "middle")
-    //   .attr("x", margin.left + innerWidth / 2)
-    //   .attr("y", height - 10)
-    //   .text("Score")
-    //   .style('font-size', '12px')
-
-    // Y-axis label
-    svg.append("text")
-      .attr("text-anchor", "middle")
-      .attr("transform", `rotate(-90)`)
-      .attr("x",  - (margin.top + innerHeight / 2))
-      .attr("y", 10)
-      .text("Frequency")
-      .style('font-size', '12px');
   }
+
 
   function drawRadarBase() {
     const svg = d3.select("#radar-chart")
     svg.selectAll("*").remove()
 
-    // const container = svg.node().parentNode
     const container = svg.node().closest(".chart-frame");
     const width = container.clientWidth
-    const height = container.clientHeight
+    const height = container.clientHeight - 20;
+
+    const tooltip = d3.select("#tooltip");
 
     svg
       .attr("width", width)
@@ -1653,6 +1672,14 @@
         .attr("alignment-baseline", "middle")
         .style("font-size", "10px")
         .text(field)
+        .style('cursor', 'default')
+        .on("mouseover", (event) => {
+        tooltip.style("opacity", 1)
+          .html(`<b>${scoreInfo[field]}</b>`)
+          .style("left", event.pageX + 10 + "px")
+          .style("top", event.pageY - 28 + "px");
+      })
+      .on("mouseout", () => tooltip.style("opacity", 0));
     })
 
     svg.node().__radar__ = {
@@ -2182,7 +2209,17 @@
       .d3AlphaDecay(0.02)
       .d3VelocityDecay(0.3)
       .d3Force("charge", d3.forceManyBody().strength(-200))
-      .d3Force('link', d3.forceLink().id(d => d.id).distance(50).strength(0.5))
+      .d3Force('link', 
+        d3.forceLink()
+        .id(d => d.id)
+        .distance(d => {
+          const similarity = d.similarity || 0.5;
+          return maxDist - similarity * (maxDist - minDist);
+        }
+      ).strength(s => {
+        const similarity = s.similarity || 0.5;
+        return 0.1 + similarity * 0.9;
+      }))
       .d3Force('spherical', null);
     Graph.numDimensions(3);
     Graph.d3ReheatSimulation(); // Restart the layout animation
@@ -2398,9 +2435,9 @@
   folder3.add(settings, 'ShowNodeNeighbors')
         .name('Show Node Neighbors')
         .onChange(showNodeNeighbors);
-  folder3.add(settings, 'ShowNodeInfo')
-       .name('Show Protein Information')
-       .onChange(showNodeInformation);
+  // folder3.add(settings, 'ShowNodeInfo')
+  //      .name('Show Protein Information')
+  //      .onChange(showNodeInformation);
   // folder3.add({ 'Load File': startDataLoad }, 'Load File');
   // folder3.add({ 'Pause/Resume Data Reload': pauseResumeDataLoad }, 'Pause/Resume Data Reload');
   folder3.open()
