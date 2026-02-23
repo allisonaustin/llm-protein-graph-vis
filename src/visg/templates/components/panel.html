@@ -1,0 +1,118 @@
+<div id="info-tab-header">
+    <span>Protein-Protein Interactions</span>
+    <button class="minimize-btn-icon" onclick="toggleInfoBody(event)">−</button>
+  </div>
+
+    <!-- Interaction score distribution -->
+    <div class="card-header collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-hist">
+      <span>Network Overview</span>
+      <i class="chevron-icon bi bi-chevron-down"></i>
+    </div>
+    <div id="collapse-hist" class="collapse show">
+      <div class="charts-container">
+        
+        <div class="charts-row two-col">
+          <div class="chart-frame score-frame">
+            <div class="chart-header">
+              <span class="chart-title">Score Distribution</span>
+            </div>
+            <svg id="score-histogram"></svg>
+          </div>
+
+          <div class="chart-frame radar-frame">
+            <div class="chart-header">
+              <span class="chart-title">STRING Scores</span>
+            </div>
+            <svg id="radar-chart"></svg>
+          </div>
+
+          <div class="chart-frame clusters-frame">
+            <div class="chart-header">
+              <span class="chart-title">Clusters</span>
+            </div>
+            <div id="cluster-list">
+            </div>
+          </div>
+        </div>
+
+        <div class="charts-row three-col">
+          <div class="chart-frame">
+            <div class="chart-header">
+              <span class="chart-title">Biological Processes</span>
+            </div>
+            <svg id="term-chart-BP" class="term-chart"></svg>
+          </div>
+
+          <div class="chart-frame">
+            <div class="chart-header">
+              <span class="chart-title">Molecular Functions</span>
+            </div>
+            <svg id="term-chart-MF" class="term-chart"></svg>
+          </div>
+
+          <div class="chart-frame">
+            <div class="chart-header">
+              <span class="chart-title">Cellular Components</span>
+            </div>
+            <svg id="term-chart-CC" class="term-chart"></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat -->
+  <div class="card-header collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-chat">
+    <span>Chat</span>
+    <i class="chevron-icon bi bi-chevron-right"></i>
+  </div>
+  <div id="collapse-chat" class="collapse">
+    <div id="chat-history" style="height: 120px; font-size: 0.9rem;"></div>
+    <div class="card-footer d-flex p-2 bg-dark">
+      <div id="chat-help" class="help-icon" data-bs-toggle="tooltip" data-bs-placement="top">
+        <i class="bi bi-question-circle-fill"></i>
+      </div>
+      <div class="help-tooltip">This chat allows you to interact with an AI assistant.</div>
+      <input type="text" id="chat-input" class="form-control me-2 bg-secondary text-white border" placeholder="Type a question...">
+      <button class="btn btn-sm btn-outline-light" onclick="sendChat()">Send</button>
+    </div>
+  </div>
+
+    <!-- Graph Tables -->
+  <div class="card-header collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-table">
+    <span>Network Details</span>
+    <i class="chevron-icon bi bi-chevron-down"></i>
+  </div>
+  
+  <div id="collapse-table" class="collapse show">
+    <div id="table-tabs" style="margin-bottom: 8px;">
+      <div id="table-help" class="help-icon" data-bs-toggle="tooltip" data-bs-placement="top"> 
+        <i class="bi bi-question-circle-fill"></i>
+        <div id="table-tooltip" class="help-tooltip">
+          Use the tabs to switch between tables. <br>
+          Use the search box to filter results from any column. <br>
+          Use "" around search for exact match <br>
+          Click on a row to show location in graph. <br>
+          Use vertical and horizontal scroll to explore all results.
+        </div>
+      </div>
+      <div id="tabs-wrapper" style="margin-left:auto; display:flex;">
+        <button id="popout-table" style="height:25px;"><i class="bi bi-box-arrow-up-right" style="font-size:0.7em;"></i></button>
+        <button id="tab-nodes" style="height:25px;" class="active-tab">Nodes</button>
+        <button id="tab-links-ver" style="height:25px;width:120px;">Verified Links</button>
+        <button id="tab-links-unver" style="height:25px;width:140px;">Unverified Links</button>
+      </div>
+    </div>
+
+      <!-- Container for tables -->
+      <div id="table-container">
+        <table id="data-table" class="display data-table nowrap" style="width: 100%; display: table">
+          <thead>
+            <tr id="table-header-row">
+              <th>Protein IDs</th>
+              <th>Link Count</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+  </div>

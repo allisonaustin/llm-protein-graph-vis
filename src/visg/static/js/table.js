@@ -1,4 +1,3 @@
-var currTable = 'Nodes';
 var currTableInstance = null;
 var searchQuery = null;
 
@@ -59,6 +58,26 @@ function populateNodeTable(newNodes) {
             this.data(rowData);
         }
     });
+
+    newNodes.forEach(node => {
+        const existing = dataTable.rows().data().toArray().some(row => row[1] === node.id);
+        if (!existing) {
+            const inD = [...new Set(node.in_degree)].length;
+            const outD = [...new Set(node.out_degree)].length;
+            const totalLinks = inD + outD;
+            const clusterCell = `<div style="display:flex; justify-content:flex-end;"><span style="width:10px;height:10px;background-color:${node.clusterColor};border-radius:50%;opacity:0.5;"></span></div>`;           
+            dataTable.row.add([clusterCell, node.id, totalLinks]);
+        }
+    });
+    $('#data-table tbody').off('click', 'tr');
+    $('#data-table tbody').on('click', 'tr', function () {
+        const rowData = dataTable.row(this).data();
+        if (rowData) {
+            const nodeId = rowData[1];
+            searchAndFocusNode(nodeId);  
+        }
+    });
+    dataTable.draw();
 }
 
 function populateVerifiedLinkTable(links) {
@@ -228,7 +247,6 @@ function populateUnverifiedLinkTable(links) {
 
 // initial load of data tables
 rebuildTable([" ", "Protein IDs", "Link Count"]);
-currTable = 'Nodes';
 
 // tab switching
 $('#tab-nodes').on('click', () => {

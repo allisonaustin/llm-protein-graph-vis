@@ -37,7 +37,7 @@ const initData = {
 };
 
 var currLayout = 'Force-Directed';
-
+var currTable = 'Nodes';
 
 function initGraph() {
     const elem = document.getElementById('3d-graph');
