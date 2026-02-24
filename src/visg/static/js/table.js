@@ -107,9 +107,7 @@ function populateLinkTable(links) {
         const srcNode = Graph.graphData().nodes.find(n => n.id === source);
         const clusterCell = srcNode ? `<div style="display:flex; justify-content:flex-end;"><span style="width:10px;height:10px;background-color:${srcNode.clusterColor || '#00a2ff'};border-radius:50%;opacity:0.5;"></span></div>` : '-';
 
-        if (link.origin && link.origin !== 'File') {
-            details = scoreInfo[link.origin] || link.origin;
-        }
+        const details = `Source: ${scoreInfo[link.origin] || link.origin}`;
 
         const species = source.split('.')[0] || '9606'; 
 
@@ -133,7 +131,7 @@ $('#tab-nodes').on('click', () => {
     $('#tab-nodes').addClass('active-tab');
     $('#tab-links').removeClass('active-tab');
     currTable = 'Nodes';
-    rebuildTable([" ", "Protein IDs", "Link Count"]);
+    rebuildTable([" ", "Ensembl Protein IDs", "Link Count"]);
     populateNodeTable(Graph.graphData().nodes);
 });
 
@@ -189,4 +187,13 @@ document.getElementById("popout-table").addEventListener("click", () => {
     if (searchQuery) {
         popoutTable.search(searchQuery).draw();
     }
+});
+
+document.getElementById('btn-clear-table').addEventListener('click', function() {
+    if (currTableInstance) {
+        currTableInstance.search('').columns().search('').draw();
+    }
+    const mainSearch = document.getElementById('main-search');
+    if (mainSearch) mainSearch.value = '';
+    searchQuery = '';
 });

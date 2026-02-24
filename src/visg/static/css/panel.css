@@ -143,7 +143,7 @@
   display: none !important;
 }
 
-.clusters-frame {
+.list-frame {
   flex: 0 0 130px; 
   max-width: 130px;
   min-width: 130px;
@@ -154,16 +154,28 @@
   border-radius: 4px;
 }
 
-#cluster-list {
+.li-container {
   flex: 1;         
   overflow-y: scroll; 
   padding: 6px;
 }
 
-#cluster-list::-webkit-scrollbar {
+.li-container::-webkit-scrollbar {
   width: 0;
   height: 0;
 }
+
+.li-container {
+  flex: 1;         
+  overflow-y: scroll; 
+  padding: 6px;
+}
+
+.li-container::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
 
 .charts-row.two-col {
   display: flex;

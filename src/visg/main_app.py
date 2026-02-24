@@ -1,7 +1,7 @@
 from visg import app
 from flask import render_template
 from flask import Flask, g
-from flask import request, jsonify
+from flask import request, jsonify, current_app
 import flask_sijax
 from visg import data_path, master_file, data_part_width, master_filename, new_data_master_filename, watchFlag, min_link_count, max_link_count
 # from visg.scripts.listener import Listener
@@ -116,6 +116,15 @@ def get_protein_stats(obj_response):
 
     obj_response.script("setStats("+str(nlen)+","+str(llen)+")")
 
+@app.route('/api/list-presets')
+def list_presets():
+    directory = os.path.join(current_app.static_folder, 'data')
+    if not os.path.exists(directory):
+        return jsonify([])
+    
+    files = [f for f in os.listdir(directory) if f.endswith(('.csv', '.tsv', '.txt'))]
+    return jsonify(files)
+
 @app.route('/upload_ppi', methods=['POST'])
 def upload_ppi():
     if 'file' not in request.files:
@@ -148,15 +157,16 @@ def upload_ppi():
             # Filtering for High Confidence (e.g., 700+)
             if score >= 700:
                 if p1 not in nodes_map: 
-                    nodes_map[p1] = {"id": p1, "origin": "File", "clusterColor": "#00a2ff"}
+                    nodes_map[p1] = {"id": p1, "origin": file.filename, "originType": "File", "clusterColor": "#00a2ff"}
                 if p2 not in nodes_map: 
-                    nodes_map[p2] = {"id": p2, "origin": "File", "clusterColor": "#00a2ff"}
+                    nodes_map[p2] = {"id": p2, "origin": file.filename, "originType": "File", "clusterColor": "#00a2ff"}
                 
                 links.append({
                     "source": p1, 
                     "target": p2, 
                     "score": score/1000.0, 
-                    "origin": "File"
+                    "origin": file.filename,
+                    "originType": "File",
                 })
                 count += 1
             

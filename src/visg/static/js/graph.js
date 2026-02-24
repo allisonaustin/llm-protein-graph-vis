@@ -526,8 +526,8 @@ function filterLinkByOrganism(link) {
 
   
 function filterLinkByGroup(link) {
-    if (link.origin !== "File" && activeGroups.Generated) return true;
-    if (link.origin == "File" && activeGroups.Given) return true;
+    if (link.originType !== "File" && activeGroups.Generated) return true;
+    if (link.originType == "File" && activeGroups.Given) return true;
     return false;
 }
 
@@ -850,7 +850,7 @@ function addGraphData(dataPart, reset = false) {
     updateGUILabels(dataPart.links);
 
     Graph.graphData(result);
-    
+
     if (currLayout === 'Spherical') applySphericalLayout(result.nodes);
     
     updateHighlight();

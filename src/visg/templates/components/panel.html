@@ -20,21 +20,20 @@
             <svg id="score-histogram"></svg>
           </div>
 
-          <div class="chart-frame clusters-frame">
+          <div class="chart-frame list-frame">
             <div class="chart-header">
               <span class="chart-title">Clusters</span>
             </div>
             <div class="empty-overlay-sm">No data uploaded</div>
-            <div id="cluster-list">
+            <div id="cluster-list"  class="li-container">
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Chat -->
   <div class="card-header collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-chat">
-    <span>Chat</span>
+    <span>LLM</span>
     <i class="chevron-icon bi bi-chevron-right"></i>
   </div>
   <div id="collapse-chat" class="collapse">
@@ -68,6 +67,9 @@
         </div>
       </div>
       <div id="tabs-wrapper" style="margin-left:auto; display:flex;">
+        <button id="btn-clear-table" class="btn btn-sm btn-outline-secondary" style="font-size: 12px;height:25px;">
+          <i class="bi bi-x-circle"></i> Clear Filters
+        </button>
         <button id="popout-table" style="height:25px;"><i class="bi bi-box-arrow-up-right" style="font-size:0.7em;"></i></button>
         <button id="tab-nodes" style="height:25px;" class="active-tab">Nodes</button>
         <button id="tab-links" style="height:25px;width:70px;">Links</button>

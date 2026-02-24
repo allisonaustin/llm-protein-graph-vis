@@ -178,6 +178,17 @@ function updateClusterList(nodeClusterMap) {
     .on("click", (event, color) => {
         if (typeof searchAndFocusCluster === "function") {
             searchAndFocusCluster(color);
+            const table = $('#data-table').DataTable();
+    
+            $.fn.dataTable.ext.search.push(
+                function(settings, data, dataIndex) {
+                    const rowData = table.row(dataIndex).data();
+                    const node = Graph.graphData().nodes.find(n => n.id === rowData[1]);
+                    return node && node.clusterColor === color;
+                }
+            );
+            table.draw();
+            $.fn.dataTable.ext.search.pop();
         }
     });
 

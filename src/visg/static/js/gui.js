@@ -95,7 +95,7 @@ function updateGUILabels(links) {
     let totalLinks = links.length || 1; 
 
     links.forEach(link => {
-        if (link.origin !== 'File') {
+        if (link.originType !== 'File') {
             genCount++;
         } else {
             baseCount++;
