@@ -107,22 +107,13 @@ function populateLinkTable(links) {
         const srcNode = Graph.graphData().nodes.find(n => n.id === source);
         const clusterCell = srcNode ? `<div style="display:flex; justify-content:flex-end;"><span style="width:10px;height:10px;background-color:${srcNode.clusterColor || '#00a2ff'};border-radius:50%;opacity:0.5;"></span></div>` : '-';
 
-        let details = "File";
-        let chosenSpecies = "9606"; 
-
-        if (link.scores && Array.isArray(link.scores) && link.scores.length > 0) {
-            chosenSpecies = link.scores[0].ncbiTaxonId || "9606";
-            details = link.scores.map(entry => {
-                const top = (typeof scoreFields !== 'undefined' ? scoreFields : [])
-                    .map(key => [key, entry[key] ?? 0])
-                    .sort((a, b) => b[1] - a[1])[0];
-                return top ? `${scoreInfo[top[0]]}: ${top[1].toFixed(3)}` : "STRING score";
-            }).join("<br>");
-        } else if (link.score) {
-            details = `Combined Score: ${link.score.toFixed(3)}`;
+        if (link.origin && link.origin !== 'File') {
+            details = scoreInfo[link.origin] || link.origin;
         }
 
-        const dataRef = `https://string-db.org/cgi/network?identifiers=${encodeURIComponent(source)}%0d${encodeURIComponent(target)}&species=${chosenSpecies}`;
+        const species = source.split('.')[0] || '9606'; 
+
+        const dataRef = `https://string-db.org/cgi/network?identifiers=${encodeURIComponent(source)}%0d${encodeURIComponent(target)}&species=${species}`;
         const sourceDataUrl = `<a href="${dataRef}" class="data-link" style="color: #00a2ff;" target="_blank" rel="noopener noreferrer">STRING</a> <i class="bi bi-box-arrow-up-right" style="font-size:0.8em;"></i>`;
         
         return [
@@ -131,7 +122,7 @@ function populateLinkTable(links) {
             target,
             `<span style="color: ${color}; font-weight: bold;">${score.toFixed(3)}</span>`,
             sourceDataUrl,
-            details,
+            details || ''
         ];
     });
     dataTable.rows.add(data).draw();
@@ -150,7 +141,7 @@ $('#tab-links').on('click', () => {
     $('#tab-links').addClass('active-tab');
     $('#tab-nodes').removeClass('active-tab');
     currTable = 'Links';
-    rebuildTable([" ", "ProteinA", "ProteinB", "Score", "Source", "Details"]);
+    rebuildTable([" ", "ProteinA", "ProteinB", "Score", "Lookup", "Details"]);
     populateLinkTable(Graph.graphData().links);
 });
 

@@ -27,7 +27,6 @@ let showNeighbors = false;
 let showNodeInfo = false;
 
 const adjacency = {};
-let clusterHulls = [];
 const timerV = 12000;
 let counter = 0;
 let counterStopAt = 195;
@@ -51,9 +50,9 @@ function initGraph() {
             let label = "";
             label += `${node.id}`;
 
-            const inD = new Set(node.in_degree || []).size;
-            const outD = new Set(node.out_degree || []).size;
-            label += ` (IN → ${inD}, OUT → ${outD})`;
+            // const inD = new Set(node.in_degree || []).size;
+            // const outD = new Set(node.out_degree || []).size;
+            // label += ` (IN → ${inD}, OUT → ${outD})`;
 
             if (showNeighbors) {
               if (!node.neighbors || node.neighbors.length === 0) {
@@ -122,6 +121,7 @@ function initGraph() {
             if (event) event.preventDefault(); 
             if (!node) return;
             focusNode = node;
+            highlightNodes.add(node.id);
             showCustomContextMenu(node, event.clientX, event.clientY);
           })
           .onLinkClick(link => {
@@ -176,6 +176,8 @@ function initGraph() {
                 })
         );
     } 
+
+    rebuildTable([" ", "Protein IDs", "Link Count"]);
 }
 
 function showNodeLabel(node) {
@@ -292,7 +294,7 @@ function searchAndFocusCluster(clusterColor) {
           return s === node.id || t === node.id;
       });
       matchingLinks.forEach(link => highlightLinks.add(link));      
-      node.showLabel = true; 
+      // node.showLabel = true; 
     });
     updateHighlight();
 }
@@ -608,33 +610,6 @@ function updateHighlight() {
         .linkDirectionalParticles(Graph.linkDirectionalParticles())
 };
 
-function updateLinkColor() {
-    const confidenceLegend = document.getElementById('legend-confidence');
-    const validationLegend = document.getElementById('legend-validation');
-
-    if (settings.EdgeColor === 'Score') {
-        confidenceLegend.style.display = 'block';
-        validationLegend.style.display = 'none';
-    } else if (settings.EdgeColor == 'Validation') {
-        confidenceLegend.style.display = 'none';
-        validationLegend.style.display = 'block';
-    } else if (settings.EdgeColor == 'None') {
-        confidenceLegend.style.display = 'none';
-        validationLegend.style.display = 'none';
-    }
-
-    Graph.linkColor(link => {
-        if (settings.EdgeColor == 'Score') {
-        return colorScale(link.score);
-        } else if (settings.EdgeColor == 'Validation') {
-        return link.type == "STRING" ? STRING_COLOR : GO_COLOR;
-        } else if (settings.EdgeColor == 'None') {
-        return '#f2f2f2';
-        }
-    })
-    Graph.refresh && Graph.refresh();
-}
-
 // module for timed calls for graph updates
 function reloadGraphData(reset = false, stopAt = counterStopAt) {
     counter = 0;
@@ -675,6 +650,15 @@ function updateStopAt(newCounterStop) {
 // reset Graph
 function resetGraph(){
     Graph.graphData(initData)
+    document.body.classList.remove('has-data');
+    highlightNodes.clear();
+    highlightLinks.clear();
+    hoverNodes.clear();
+    hoverNode = null;
+    focusNode = null;
+    for (const key in adjacency) {
+        delete adjacency[key];
+    }
 }
 
 function startDataLoad(){
@@ -699,6 +683,8 @@ function addGraphData(dataPart, reset = false) {
         resetGraph();
         console.log("reset done.");
     }
+
+    document.body.classList.add('has-data');
 
     dataPart.nodes = dataPart.nodes.map(n => ({
         ...n,
@@ -814,8 +800,48 @@ function addGraphData(dataPart, reset = false) {
             nodeClusterMap[node.id] = node.clusterColor;
         }
     });
-    console.log(nodeClusterMap)
+
     updateClusterList(nodeClusterMap);
+
+    // adding cluster colors around nodes
+    Graph.nodeThreeObject(node => {
+      const group = new THREE.Group();
+      const radius = 4;
+
+      const isHighlighted = highlightNodes.has(node.id);
+      const isHovered = node.id === hoverNode; 
+
+      if (isHovered && node.showLabel) {
+        const sprite = new SpriteText(node.id);
+        sprite.color = "white";     
+        sprite.textHeight = 8;
+        return sprite;              
+      }
+      let baseColor = "white";
+      if (isHighlighted && !isHovered) {
+        baseColor = "#FFA000";
+      }
+
+      const mainSphere = new THREE.Mesh(
+        new THREE.SphereGeometry(radius, 16, 16),
+        new THREE.MeshStandardMaterial({
+          color: baseColor,
+          roughness: 0.8,
+          metalness: 0
+        })
+      );
+
+      group.add(mainSphere);
+
+      if (node.showLabel && !isHovered) {
+        const sprite = new SpriteText(node.id);
+        sprite.color = "white";     
+        sprite.textHeight = 8;
+        sprite.position.y = radius * 2;
+        group.add(sprite);
+      }
+      return group;
+    });
 
     rebuildTable([" ", "Protein IDs", "Link Count"]);
     if (currTable == 'Nodes') populateNodeTable(newNodes);

@@ -36,26 +36,6 @@ body{
     color: white;
 }
 
-.minimize-btn-icon {
-  width: 1.5rem;
-  height: 1.5rem;
-  font-size: 1.2rem;
-  font-weight: bold;
-  border: none;
-  background: transparent;
-  color: white;
-  display: flex;
-  justify-content: center;
-  align-items: center; 
-  cursor: pointer;
-  transition: color 0.2s, transform 0.2s;
-}
-
-.minimize-btn-icon:hover {
-  color: #007bff;
-  transform: scale(1.1);
-}
-
 #title {
     text-shadow: 2px 2px 4px #000000;
     font-size:large;
@@ -66,17 +46,9 @@ body{
     z-index: 1;
 }
 
-.edge-legend {
-    color:white;
-}
-
 img {
     opacity: 1;
   }
-
-div.scene-nav-info{
-    font-size: medium;
-}
 
 div.dg {
     width: 250px;  
@@ -115,77 +87,12 @@ div.dg .cr.has-slider input[type="text"] {
   font-size: 14px;      
 }
 
-#protein-info-container {
-  width: 30rem;
-  height: calc(100vh - 80px);
-  max-height: calc(100vh - 80px);
-  margin: 10px;
-  top: 10px;
-  display: flex;
-  flex-direction: column;
-  background: #212529;
-  border-radius: 8px;
-  overflow-y: auto; 
-  transition: max-height 0.3s ease; 
-}
-
-#protein-info-container.minimized {
-  max-height: 2rem; /* only show header */
-}
-
-#protein-info-container::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-}
-
-#info-tab-header {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 30px;
-  padding: 0.25rem 0.5rem;
-  background: #343a40; /* darker so it stands out */
-  border-bottom: 1px solid #495057;
-}
-
-.card-header {
-  padding: 0.25rem 0.5rem;   
-  height: 30px;       
-  line-height: 30px; 
-}
-
-#info-tab-header button {
-  padding: 0 0.4rem;       
-  font-size: 0.8rem;      
-}
-
 .header {
   height: 20px;
   background: #222;
   color: white;
   padding: 6px 6px;
   cursor: move;
-}
-
-.card-header {
-    padding: 0.1rem 0.5rem;
-    line-height: 1.1;
-    min-height: unset;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-#chat-history {
-  resize: vertical;
-  overflow: auto;
-  padding: 12px 16px;
-  box-sizing: border-box;
-  min-height: 80px;
-  max-height: 400px;
 }
 
 .legend-item {
@@ -229,207 +136,12 @@ div.dg .cr.has-slider input[type="text"] {
   margin: 0;
 }
 
-#context-menu li {
-  padding: 6px 12px;
-}
-
 .list-item:hover {
     cursor: pointer;
 }
 
-.data-table {
-  font-size: small;
-  background-color: white;
-  color: black;
-}
-
-.data-table tbody tr {
-  background-color: white;
-  color: black;
-}
-
-.data-table tbody tr:hover {
-  background-color: #cccfd2; 
-  cursor: pointer;
-}
-
-.data-table thead th {
-  padding: 4px 8px;  
-  background-color: #f8f9fa;
-  color: black;
-  white-space: nowrap;
-}
-
-#data-table_filter input {
-  border-radius: 4px;
-  border: none;
-}
-
-#table-tabs {
-  display: flex;
-  flex-direction: row;
-  height: 30px;
-}
-
-#table-help {
-  margin-right: 80px;
-  margin-left: 10px;
-}
-
-#table-tooltip {
-  width: 350px; 
-}
-
 #play-pause-icon, #export-btn {
   font-size: 20px;
-}
-
-#table-tabs button {
-  background: #b9b9b9;
-  color: white;
-  border: none;
-  cursor: pointer;
-  margin-right: 4px;
-  border-radius: 4px 4px 0 0;
-}
-
-#table-tabs button.active-tab {
-  background: #6ea8fe;
-  font-weight: bold;
-}
-
-#table-container {
-  background-color: #f8f9fa;
-  color: black;
-  height: 300px;
-}
-
-.collapse-body {
-  max-height: 1000px;
-  overflow: hidden;
-  transition: max-height 0.3s ease;
-}
-
-.collapse-body.collapsed {
-  max-height: 0;
-  overflow: hidden;
-}
-
-.card-header.collapsible {
-  cursor: pointer;
-}
-
-.charts-container {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.charts-row {
-  display: flex;
-  gap: 4px; 
-}
-
-.chart-frame {
-  display: flex;
-  flex-direction: column;
-  background: white;
-  color: black;
-  border-radius: 4px;
-  max-height: 180px;
-}
-
-.clusters-frame {
-  flex: 0 0 130px; 
-  max-width: 130px;
-  min-width: 130px;
-  display: flex;
-  flex-direction:column;
-  background: white;
-  color: black;
-  border-radius: 4px;
-}
-
-#cluster-list {
-  flex: 1;         
-  overflow-y: scroll; 
-  padding: 6px;
-}
-
-#cluster-list::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-}
-
-.charts-row.two-col {
-  display: flex;
-  gap: 4px;
-}
-
-.charts-row.two-col .chart-frame {
-  flex: 1 1 0; 
-  display: flex;
-  flex-direction: column; 
-}
-
-.charts-row.three-col .chart-frame {
-  flex: 1 1 0;
-}
-
-.chart-frame svg {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.chart-header {
-  background: #f2f2f2;
-  border-bottom: 1px solid #ccc;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-size: 14px;
-  font-weight: bold;
-  border-radius: 4px 4px 0 0;
-}
-
-.chart-info-circle {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #b9b9b9;
-  color: white;
-  font-size: 10px;
-  font-weight: bold;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-}
-
-.chart-info:hover::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  top: 20px;  /* below the icon */
-  left: 50%;
-  max-width: 100px;
-  text-align: center;
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.75);
-  color: white;
-  padding: 6px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  white-space: nowrap;
-  z-index: 9999;
-}
-
-.chevron-icon {
-  transition: transform 0.3s ease;
-}
-
-.card-header.collapsed .chevron-icon {
-  transform: rotate(-90deg);
 }
 
 #gui-container { 
@@ -450,10 +162,6 @@ div.dg .cr.has-slider input[type="text"] {
   color: white;
 }
 
-#chat-input {
-  height: 35px;
-}
-
 .help-tooltip {
   position: fixed;
   width: 200px;
@@ -465,15 +173,4 @@ div.dg .cr.has-slider input[type="text"] {
   pointer-events: none;
   z-index: 1000;
   display: none;
-}
-
-.data-link {
-  color: inherit;             
-  text-decoration: none;     
-  border-bottom: 1px dotted; 
-  cursor: pointer;
-}
-
-.data-link:hover {
-  border-bottom-style: solid; 
 }

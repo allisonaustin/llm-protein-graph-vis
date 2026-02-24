@@ -1,6 +1,6 @@
 <div id="info-tab-header">
     <span>Info</span>
-    <button class="minimize-btn-icon" onclick="toggleInfoBody(event)">+</button>
+    <button class="minimize-btn-icon" onclick="toggleInfoBody(event)">−</button>
   </div>
 
     <!-- Interaction score distribution -->
@@ -16,6 +16,7 @@
             <div class="chart-header">
               <span class="chart-title">Score Distribution</span>
             </div>
+            <div class="empty-overlay-sm">No data uploaded</div>
             <svg id="score-histogram"></svg>
           </div>
 
@@ -23,6 +24,7 @@
             <div class="chart-header">
               <span class="chart-title">Clusters</span>
             </div>
+            <div class="empty-overlay-sm">No data uploaded</div>
             <div id="cluster-list">
             </div>
           </div>
@@ -81,7 +83,8 @@
               <th>Link Count</th>
             </tr>
           </thead>
-          <tbody></tbody>
+          <tbody>
+          </tbody>
         </table>
       </div>
   </div>
