@@ -9,8 +9,8 @@ var activeLink = null;
 var activeLinks = new Set(['red', 'orange', 'blue', 'green', 'gray']); // for custom edge coloring
 var activeSpecies = {}; // GUI toggle states
 const activeGroups = {
-    Unverified: true,
-    Verified: true
+    Given: true,
+    Generated: true
   };
 
 var existingControllers = {};
@@ -20,7 +20,7 @@ let totalLinks = 0;
 
 let enableNodeDragging = false;
 let enablePointerInteractions = true;
-let pauseAnimation = false;
+let pauseAnimation = true;
 let showLinkWidth = false;
 let showLinkParticle = false;
 let showNeighbors = false;
@@ -41,7 +41,6 @@ var currTable = 'Nodes';
 
 function initGraph() {
     const elem = document.getElementById('3d-graph');
-
     Graph = ForceGraph3D()(elem)
           .backgroundColor(bckColor) //#101020
           .graphData(initData)
@@ -74,7 +73,6 @@ function initGraph() {
             }
             return label;
           })
-          .nodeVal(node => (node.neighbors.length > 20 && node.neighbors.length < 30) ? 2 : (node.neighbors.length >= 30) ? 3 : 1)
           .nodeResolution(20)
           .linkColor(link => link.score ? colorScale(link.score) : 'gray')
           .linkOpacity(1)
@@ -133,8 +131,6 @@ function initGraph() {
               highlightLinks.clear();
               clearNodeLabels();
               updateHighlight();
-              d3.select("#radar-chart").selectAll(".selected-link-line").remove();
-              d3.select("#radar-chart g.legend").selectAll('.selected').remove();
               return;
             }
 
@@ -191,14 +187,6 @@ function showNodeLabel(node) {
 function clearNodeLabels() {
     Graph.graphData().nodes.forEach(n => n.showLabel = false);
     Graph.refresh();
-}
-
-function clearSelectedLink() {
-    d3.select("#radar-chart").selectAll(".selected-link-line").remove();
-}
-
-function clearRadarLegend() {
-    d3.select("#radar-chart g.legend").selectAll('.selected').remove();
 }
 
 function collisionUpdate(){
@@ -267,23 +255,47 @@ function searchAndFocusCluster(clusterColor) {
     const nodesInCluster = Graph.graphData().nodes.filter(n => n.clusterColor === clusterColor);
     if (nodesInCluster.length === 0) return;
 
-    const avgX = d3.mean(nodesInCluster, n => n.x);
-    const avgY = d3.mean(nodesInCluster, n => n.y);
-    const avgZ = d3.mean(nodesInCluster, n => n.z);
+    const hubNode = nodesInCluster.reduce((prev, current) => {
+        const prevCount = (prev.neighbors || []).length;
+        const currCount = (current.neighbors || []).length;
+        return (currCount > prevCount) ? current : prev;
+    });
 
     const distance = 500; 
-    const distRatio = 1 + distance / Math.hypot(avgX, avgY, avgZ);
+    const distRatio = 1 + distance / Math.hypot(hubNode.x, hubNode.y, hubNode.z);
 
     Graph.cameraPosition(
       { 
-        x: avgX * distRatio, 
-        y: avgY * distRatio, 
-        z: avgZ * distRatio 
+        x: hubNode.x * distRatio, 
+        y: hubNode.y * distRatio, 
+        z: hubNode.z * distRatio 
       },  
-      { x: avgX, y: avgY, z: avgZ }, 
+      { x: hubNode.x, y: hubNode.y, z: hubNode.z }, 
       1000 
     );
-  }
+
+    highlightNodes.clear();
+    highlightLinks.clear();
+    clearNodeLabels();
+    hoverNode = null;
+
+    nodesInCluster.forEach(node => {
+      highlightNodes.add(node.id);
+      
+      if (node.neighbors) {
+          node.neighbors.forEach(neighbor => highlightNodes.add(neighbor));
+      }
+      
+      const matchingLinks = Graph.graphData().links.filter(l => {
+          const s = l.source.id || l.source;
+          const t = l.target.id || l.target;
+          return s === node.id || t === node.id;
+      });
+      matchingLinks.forEach(link => highlightLinks.add(link));      
+      node.showLabel = true; 
+    });
+    updateHighlight();
+}
 
 function searchAndFocusNode(query) {
     const node = Graph.graphData().nodes.find(n => n.id.toLowerCase() === query.toLowerCase());
@@ -512,8 +524,8 @@ function filterLinkByOrganism(link) {
 
   
 function filterLinkByGroup(link) {
-    if (link.type !== "STRING" && activeGroups.Unverified) return true;
-    if (link.type == "STRING" && activeGroups.Verified) return true;
+    if (link.origin !== "File" && activeGroups.Generated) return true;
+    if (link.origin == "File" && activeGroups.Given) return true;
     return false;
 }
 
@@ -555,9 +567,6 @@ const clearHighlights = () => {
     highlightLinks.clear();
     updateHighlight();
     clearNodeLabels();
-
-    // clearSelectedLink();
-    // clearRadarLegend();
 }
 
 function filterLinkByColor(link) {
@@ -673,35 +682,49 @@ function startDataLoad(){
 
     // reset chart svgs and table
     d3.select("#score-histogram").selectAll("*").remove();
-    d3.select("#radar-chart").selectAll("*").remove();
-    d3.select("#radar-chart").selectAll(".selected-link-line").remove();
-    d3.select(".term-chart").selectAll("*").remove();
     if ($.fn.DataTable.isDataTable('#data-table')) {
       $('#data-table').DataTable().destroy();
       $('#data-table tbody').empty();  
     }
 
-    // updateLinkCount(minLimit, maxLimit);
+    updateLinkCount(minLimit, maxLimit);
     reloadGraphData()
     settings.MinLinks = minLimit;
     settings.MaxLinks = maxLimit
 }
 
-// update graph with new data
-function addGraphData(dataPart, reset = false){
-
-    if(reset){
-      console.log("resetting...")
-      resetGraph();
-      console.log("reset done.")
+function addGraphData(dataPart, reset = false) {
+    if (reset) {
+        console.log("resetting...");
+        resetGraph();
+        console.log("reset done.");
     }
+
+    dataPart.nodes = dataPart.nodes.map(n => ({
+        ...n,
+        in_degree: n.in_degree || [],
+        out_degree: n.out_degree || [],
+        neighbors: n.neighbors || [],
+        links: n.links || [],
+        showLable: false
+    }));
+
+    dataPart.links.forEach(link => {
+        const s = typeof link.source === 'object' ? link.source.id : link.source;
+        const t = typeof link.target === 'object' ? link.target.id : link.target;
+        
+        const sNode = dataPart.nodes.find(n => n.id === s);
+        const tNode = dataPart.nodes.find(n => n.id === t);
+        if (sNode && !sNode.neighbors.includes(t)) sNode.neighbors.push(t);
+        if (tNode && !tNode.neighbors.includes(s)) tNode.neighbors.push(s);
+    });
 
     const linkedNodeIds = new Set();
     dataPart.links.forEach(link => {
-      const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-      const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-      linkedNodeIds.add(sourceId);
-      linkedNodeIds.add(targetId);
+        const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+        linkedNodeIds.add(sourceId);
+        linkedNodeIds.add(targetId);
     });
 
     dataPart.nodes = dataPart.nodes.filter(n => linkedNodeIds.has(n.id));
@@ -711,175 +734,103 @@ function addGraphData(dataPart, reset = false){
     let newNodes = [];
     let oldNodes = [];
     let nodesFound = [];
-    if(nodes.length !== 0){
-      nodes.forEach(n => {
-        const oldNVals = [...dataPart.nodes].filter(newN => (newN.id === n.id))[0]
 
-        if(!oldNVals || oldNVals.length === 0){
-          oldNodes.push(n)
-        } else{
-          nodesFound.push(n.id);
-          const oldLinkVals = [...dataPart.links].filter(newL => (newL.source === n.id) || (newL.target === n.id))
+    if (nodes.length !== 0) {
+        nodes.forEach(n => {
+            const oldNVals = dataPart.nodes.find(newN => newN.id === n.id);
 
-          // let inLinks = [];
-          // let outLinks = [];
-          oldLinkVals.forEach(inoutl => {
-            if(n.id === inoutl.source)
-              n.out_degree.push(inoutl.target)
-            else if (n.id === inoutl.target)
-              n.in_degree.push(inoutl.source)
-          })
+            if (!oldNVals) {
+                oldNodes.push(n);
+            } else {
+                nodesFound.push(n.id);
+                const oldLinkVals = dataPart.links.filter(newL => (newL.source === n.id) || (newL.target === n.id));
 
-          n.out_degree = [...new Set(n.out_degree)];
-          n.in_degree = [...new Set(n.in_degree)];
+                oldLinkVals.forEach(inoutl => {
+                    const src = typeof inoutl.source === 'object' ? inoutl.source.id : inoutl.source;
+                    const tgt = typeof inoutl.target === 'object' ? inoutl.target.id : inoutl.target;
+                    
+                    if (n.id === src) n.out_degree.push(tgt);
+                    else if (n.id === tgt) n.in_degree.push(src);
+                });
 
-          // n.in_degree += inLinks;
-          // n.out_degree += outLinks;
+                n.out_degree = [...new Set(n.out_degree)];
+                n.in_degree = [...new Set(n.in_degree)];
+                n.links = [...(n.links || []), ...oldLinkVals];
+                n.neighbors = [...new Set([...(n.neighbors || []), ...(oldNVals.neighbors || [])])];
+                n.showLable = false;
+                oldNodes.push(n);
+            }
+        });
+        newNodes = dataPart.nodes.filter(newN => !(nodesFound.includes(newN.id)));
+    } else {
+        newNodes = dataPart.nodes.map(n => {
+            const nodeLinks = dataPart.links.filter(l => {
+                const src = typeof l.source === 'object' ? l.source.id : l.source;
+                const tgt = typeof l.target === 'object' ? l.target.id : l.target;
+                return src === n.id || tgt === n.id;
+            });
 
-          n.links = [...n.links, ...oldLinkVals]
-          n.neighbors = [...new Set([...n.neighbors, ...oldNVals.neighbors])]
-          n.showLable = false;
-          oldNodes.push(n)
-        }
+            nodeLinks.forEach(l => {
+                const src = typeof l.source === 'object' ? l.source.id : l.source;
+                const tgt = typeof l.target === 'object' ? l.target.id : l.target;
+                
+                if (n.id === src) n.out_degree.push(tgt);
+                else if (n.id === tgt) n.in_degree.push(src);
+            });
 
-
-      })
-      newNodes = dataPart.nodes.filter(newN => !(nodesFound.includes(newN.id)))
-    }else{
-      newNodes = dataPart.nodes
+            n.out_degree = [...new Set(n.out_degree)];
+            n.in_degree = [...new Set(n.in_degree)];
+            n.neighbors = [...new Set([...n.out_degree, ...n.in_degree])];
+            
+            return n;
+        });
     }
 
     const result = {
-      nodes: [...oldNodes, ...newNodes ],
-      links: links.concat(dataPart.links)//[...links, ...dataPart.links ]
+        nodes: [...oldNodes, ...newNodes],
+        links: links.concat(dataPart.links)
     };
 
     dataPart.links.forEach(link => {
-      const sourceId = typeof link.source === 'object' ? link.source.id : link.source
-      const targetId = typeof link.target === 'object' ? link.target.id : link.target
-      if (!adjacency[sourceId]) adjacency[sourceId] = new Set();
-      if (!adjacency[targetId]) adjacency[targetId] = new Set();
-      adjacency[sourceId].add(targetId);
-      adjacency[targetId].add(sourceId);
+        const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+        if (!adjacency[sourceId]) adjacency[sourceId] = new Set();
+        if (!adjacency[targetId]) adjacency[targetId] = new Set();
+        adjacency[sourceId].add(targetId);
+        adjacency[targetId].add(sourceId);
     });
 
     getConnectedComponents(result.nodes, adjacency);
     assignLinkCurvature(result.links);
 
-    const nlen = result.nodes ? new Set(result.nodes).size : 0;
+    const nlen = result.nodes ? new Set(result.nodes.map(n => n.id)).size : 0;
     const llen = result.links ? getUniqueLinks(result.links).length : 0;
 
-    // Sijax.request("getProteinStats")
     setStats(nlen, llen);
+
+    const nodeClusterMap = {};
+    result.nodes.forEach(node => {
+        if (node.clusterColor) {
+            nodeClusterMap[node.id] = node.clusterColor;
+        }
+    });
+    console.log(nodeClusterMap)
+    updateClusterList(nodeClusterMap);
+
+    rebuildTable([" ", "Protein IDs", "Link Count"]);
     if (currTable == 'Nodes') populateNodeTable(newNodes);
-    else if (currTable == 'Verified Links') populateVerifiedLinkTable(dataPart.links);
-    else if (currTable == 'Unverified Links') populateUnverifiedLinkTable(dataPart.links);
+    else if (currTable == 'Links') populateLinkTable(dataPart.links);
 
-    // counting verified/unverifed links for GUI
-    let verifiedCount = 0;
-    let unverifiedCount = 0;
-    let totalLinks = dataPart.links.length;
-
-    dataPart.links.forEach(link => {
-      if (link.scores && link.type != "STRING") {
-        unverifiedCount++;
-      } else {
-        verifiedCount++; 
-      }
-    })
-    
-    const stringPercent = ((verifiedCount / totalLinks) * 100).toFixed(1);
-    const goPercent = ((unverifiedCount / totalLinks) * 100).toFixed(1);
-
-    if (existingControllers.hasOwnProperty('Verified')) {
-      folder6.remove(existingControllers['Verified']);
-    }
-    const verifiedLabel = `Verified (${stringPercent}%)`;
-    const verifiedController = folder6.add(activeGroups, 'Verified').name(verifiedLabel).onChange(updateLinkGroups);
-    existingControllers['Verified'] = verifiedController;
-
-    if (existingControllers.hasOwnProperty('Unverified')) {
-      folder6.remove(existingControllers['Unverified']);
-    }
-    const unverifiedLabel = `Not verified (${goPercent}%)`;
-    const unverifiedController = folder6.add(activeGroups, 'Unverified').name(unverifiedLabel).onChange(updateLinkGroups);
-    existingControllers['Unverified'] = unverifiedController;
-    folder6.open();
-
-    // adding limit for graph size for user study
-    // if (Graph.graphData().nodes.length >= 200 && !pauseAnimation) {
-    //   pauseAnimation = true;
-    // }
+    updateGUILabels(dataPart.links);
 
     Graph.graphData(result);
-    if (currLayout === 'Spherical') {
-      applySphericalLayout(result.nodes);
-    }
+    
+    if (currLayout === 'Spherical') applySphericalLayout(result.nodes);
+    
     updateHighlight();
+    refreshCharts();
+}
 
-    drawConfidenceHistogram();
-    drawRadarChart();
-    drawTermChart("BP");
-    drawTermChart("MF");
-    drawTermChart("CC");
-
-    // adding cluster colors around nodes
-    Graph.nodeThreeObject(node => {
-      const group = new THREE.Group();
-      const radius = 4;
-
-      const isHighlighted = highlightNodes.has(node.id);
-      const isHovered = node.id === hoverNode; 
-
-      if (isHovered && node.showLabel) {
-        const sprite = new SpriteText(node.id);
-        sprite.color = "white";     
-        sprite.textHeight = 8;
-        return sprite;              
-      }
-      let baseColor = "white";
-      if (isHighlighted && !isHovered) {
-        baseColor = "#FFA000";
-      }
-
-      const mainSphere = new THREE.Mesh(
-        new THREE.SphereGeometry(radius, 16, 16),
-        new THREE.MeshStandardMaterial({
-          color: baseColor,
-          roughness: 0.8,
-          metalness: 0
-        })
-      );
-
-      group.add(mainSphere);
-
-      // if (node.clusterColor) {
-      //   const haloSphere = new THREE.Mesh(
-      //     new THREE.SphereGeometry(radius * 4.3, 24, 24),
-      //     new THREE.MeshBasicMaterial({
-      //       color: node.clusterColor,
-      //       transparent: true,
-      //       opacity: 0.3,
-      //       depthWrite: false
-      //     })
-      //   );
-      //   group.add(haloSphere);
-      // }
-
-      if (node.showLabel && !isHovered) {
-        const sprite = new SpriteText(node.id);
-        sprite.color = "white";
-        sprite.textHeight = 8;
-        sprite.position.y = radius * 2;
-        group.add(sprite);
-      }
-
-      return group;
-    });
-
-    // adding logos and title
-    // document.getElementById("logo-images").style.paddingTop = (elem.offsetHeight-100).toString()+"px";
-    // document.getElementById("logo-images").style.paddingLeft = (elem.offsetWidth/1.37).toString()+"px";
-    // document.getElementById("logo-images").style.visibility = "visible";
-    // document.getElementById("title").style.width = elem.offsetWidth.toString()+"px"
+function refreshCharts() {
+    if (typeof drawHistogram === "function") drawHistogram();
 }

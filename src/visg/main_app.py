@@ -1,6 +1,7 @@
 from visg import app
 from flask import render_template
 from flask import Flask, g
+from flask import request, jsonify
 import flask_sijax
 from visg import data_path, master_file, data_part_width, master_filename, new_data_master_filename, watchFlag, min_link_count, max_link_count
 # from visg.scripts.listener import Listener
@@ -18,7 +19,7 @@ from networkx.readwrite import json_graph
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import time
-import os
+import io
 import itertools
 
 
@@ -54,18 +55,6 @@ def check_file_updates(obj_response):
             finalK = Protein_Graph.get_graph(min_link_count, max_link_count, master_filename, True, True)
             toggle_listener(True)
             obj_response.script("reloadGraphData(reset = true, stopAt = "+str(finalK)+")")
-
-
-
-
-# def check_reset_graph_flag(obj_response, minlink_count, maxlink_count):
-#     if reset_graph_flag:
-#         toggle_listener(False)
-#         finalK = Protein_Graph.get_graph(minlink_count, maxlink_count, master_filename, True, True)
-#         toggle_listener(True)
-#         obj_response.script("reloadGraphData(reset = true, stopAt = "+str(finalK)+")")
-#
-#     reset_graph_flag = False
 
 def toggle_listener(watch):
    watchFlag = watch
@@ -127,6 +116,58 @@ def get_protein_stats(obj_response):
 
     obj_response.script("setStats("+str(nlen)+","+str(llen)+")")
 
+@app.route('/upload_ppi', methods=['POST'])
+def upload_ppi():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file"}), 400
+    
+    file = request.files['file']
+    nodes_map = {}
+    links = []
+    
+    try:
+        count = 0
+        for line_binary in file:
+            line = line_binary.decode('utf-8').strip()
+            
+            # Skip empty lines or header
+            if not line or line.startswith('protein1'):
+                continue
+                
+            parts = line.split()
+            if len(parts) < 3:
+                continue
+                
+            p1, p2, score_str = parts[0], parts[1], parts[2]
+            
+            try:
+                score = int(score_str)
+            except ValueError:
+                continue
+
+            # Filtering for High Confidence (e.g., 700+)
+            if score >= 700:
+                if p1 not in nodes_map: 
+                    nodes_map[p1] = {"id": p1, "origin": "File", "clusterColor": "#00a2ff"}
+                if p2 not in nodes_map: 
+                    nodes_map[p2] = {"id": p2, "origin": "File", "clusterColor": "#00a2ff"}
+                
+                links.append({
+                    "source": p1, 
+                    "target": p2, 
+                    "score": score/1000.0, 
+                    "origin": "File"
+                })
+                count += 1
+            
+            if count >= 3000:
+                break
+                
+        return jsonify({"nodes": list(nodes_map.values()), "links": links})
+
+    except Exception as e:
+        print(f"Error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/')
 def hello():
@@ -134,14 +175,4 @@ def hello():
 
 @flask_sijax.route(app, '/index')
 def index():
-
-    if g.sijax.is_sijax_request:
-        g.sijax.register_callback('getDataPartions', get_graph_partions)
-#         g.sijax.register_callback('getGraphPartition', get_graph_partition)
-#         g.sijax.register_callback('setNodeLinkLimit', set_nodelink_limit)
-#         g.sijax.register_callback('getProteinStats', get_protein_stats)
-#         g.sijax.register_callback('checkGraphUpdates', check_file_updates)
-        return g.sijax.process_request()
-
     return render_template("index_main_3D.html")
-

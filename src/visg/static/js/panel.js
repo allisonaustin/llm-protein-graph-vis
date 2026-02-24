@@ -238,51 +238,51 @@ function createProteinModal() {
     const container = d3.select("#cluster-list");
     container.selectAll("*").remove(); 
 
-    const uniqueColors = Array.from(new Set(Object.values(nodeClusterMap)));
+    const colorCounts = {};
+    Object.values(nodeClusterMap).forEach(color => {
+        colorCounts[color] = (colorCounts[color] || 0) + 1;
+    });
+
+    const uniqueColors = Object.keys(colorCounts);
 
     const clusterDivs = container.selectAll(".cluster-item")
-      .data(uniqueColors, d => d)
+      .data(uniqueColors)
       .join("div")
       .attr("class", "cluster-item")
       .style("display", "flex")
       .style("align-items", "center")
-      .style("margin-bottom", "6px")
+      .style("margin-bottom", "8px")
+      .style("padding", "2px 4px")
       .style("cursor", "pointer")
-     .on("mouseover", function(event, d) {
-        d3.selectAll(".cluster-area")
-          .attr("opacity", a => (a.color === d ? 0.8 : 0))
-          .attr("stroke-width", a => (a.color === d ? 2 : 0));
-      })
-      .on("mouseout", function(event, d) {
-        d3.selectAll(".cluster-area")
-          .attr("opacity", 0.4)
-          .attr("stroke-width", 1.5);
-      })
-      .on("click", (event, d) => {
-        searchAndFocusCluster(d);
+      // .on("mouseover", function(event, color) {
+      // })
+      // .on("mouseout", function() { 
+      // })
+      .on("click", (event, color) => {
+          if (typeof searchAndFocusCluster === "function") {
+              searchAndFocusCluster(color);
+          }
       });
 
     clusterDivs.append("div")
-      .style("width", "14px")
-      .style("height", "14px")
-      .style("margin-right", "6px")
+      .style("width", "12px")
+      .style("height", "12px")
+      .style("margin-right", "8px")
       .style("background-color", d => d)
-      .style("opacity", 0.7)
-      .style("border", "1px solid #ccc")
-      .style("border-radius", "50%"); 
+      .style("border-radius", "50%")
+      .style("opacity", "0.5")
+      .style("border", "1px solid rgba(255,255,255,0.2)");
 
     clusterDivs.append("span")
-      .text((d, i) => `Cluster ${i + 1}`)
-      .style("font-size", "11px")
-      .style("color", "#333");
-  }
+      .text((d, i) => `Cluster ${i + 1} (${colorCounts[d]})`)
+      .style("font-size", "12px")
+}
 
-  function drawConfidenceHistogram() {
+  function drawHistogram() {
     const svg = d3.select("#score-histogram");
-
     const container = svg.node().closest(".chart-frame");
     const width = container.clientWidth;
-    const height = 120;
+    const height = 140;
 
     const margin = { top: 20, right: 20, bottom: 30, left: 40 };
     const innerWidth = width - margin.left - margin.right;
@@ -300,45 +300,16 @@ function createProteinModal() {
 
       chartG.append("g").attr("class", "y-axis");
 
-      chartG.append("g").attr("class", "string-bars");
-      chartG.append("g").attr("class", "go-bars");
+      chartG.append("g").attr("class", "bars");
 
-      svg.append("text")
-        .attr("class", "y-label")
-        .attr("text-anchor", "middle")
-        .attr("transform", `rotate(-90)`)
-        .attr("x",  - (margin.top + innerHeight / 2))
-        .attr("y", 12)
-        .text("Frequency")
-        .style("font-size", "12px");
-
-      const legendData = [
-        { label: "STRING", color: STRING_COLOR },
-        { label: "GO", color: GO_COLOR }
-      ];
-
-      const legend = svg.append("g")
-        .attr("class", "legend")
-        .attr("transform", `translate(10, ${height})`);
-
-      const legendSpacing = 60;
-
-      legend.selectAll("rect")
-        .data(legendData)
-        .join("rect")
-        .attr("x", (d, i) => i * legendSpacing)
-        .attr("width", 8)
-        .attr("height", 8)
-        .attr("fill", d => d.color);
-
-      legend.selectAll("text")
-        .data(legendData)
-        .join("text")
-        .attr("x", (d, i) => i * legendSpacing + 12)
-        .attr("y", 6)
-        .style("font-size", "12px")
-        .attr("dominant-baseline", "middle")
-        .text(d => d.label);
+      // svg.append("text")
+      //   .attr("class", "y-label")
+      //   .attr("text-anchor", "middle")
+      //   .attr("transform", `rotate(-90)`)
+      //   .attr("x",  - (margin.top + innerHeight / 2))
+      //   .attr("y", 12)
+      //   .text("Frequency")
+      //   .style("font-size", "12px");
     }
 
     const x = d3.scaleLinear()
@@ -349,23 +320,14 @@ function createProteinModal() {
     const binStep = 1 / binCount;
     const thresholds = d3.range(0, 1 + binStep, binStep);
 
-    const verifiedScores = Graph.graphData().links
-      .filter(d => d.type === "STRING")
+    const scores = Graph.graphData().links
       .map(d => d.score);
 
-    const unverifiedScores = Graph.graphData().links
-      .filter(d => d.type !== "STRING")
-      .map(d => d.score);
-
-    const binsV = d3.histogram()
+    const bins = d3.histogram()
       .domain([0, 1])
-      .thresholds(thresholds)(verifiedScores);
+      .thresholds(thresholds)(scores);
 
-    const binsUnv = d3.histogram()
-      .domain([0, 1])
-      .thresholds(thresholds)(unverifiedScores);
-
-    const maxCount = d3.max([...binsV, ...binsUnv], d => d.length);
+    const maxCount = d3.max(bins, d => d.length);
 
     const y = d3.scaleLinear()
       .domain([0, maxCount])
@@ -380,9 +342,9 @@ function createProteinModal() {
     chartG.select(".y-axis").call(d3.axisLeft(y).ticks(5));
 
     // STRING
-    chartG.select(".string-bars")
+    chartG.select(".bars")
       .selectAll("rect")
-      .data(binsV)
+      .data(bins)
       .join("rect")
       .attr("x", d => x(d.x0))
       .attr("y", d => y(d.length))
@@ -401,31 +363,7 @@ function createProteinModal() {
         tooltip.style("opacity", 0);
         d3.select(this).attr("fill", STRING_COLOR);
       });
-
-    // GO
-    chartG.select(".go-bars")
-      .selectAll("rect")
-      .data(binsUnv)
-      .join("rect")
-      .attr("x", d => x(d.x0) + barWidth + 1)
-      .attr("y", d => y(d.length))
-      .attr("width", barWidth)
-      .attr("height", d => innerHeight - y(d.length))
-      .attr("fill", GO_COLOR)
-      .on("mouseover", function(event, d) {
-        tooltip.style("opacity", 1)
-          .html(`Count: ${d.length}`)
-          .style("left", `${event.pageX + 10}px`)
-          .style("top", `${event.pageY - 28}px`);
-
-        d3.select(this).attr("fill", "#f7e09e");
-      })
-      .on("mouseout", function() {
-        tooltip.style("opacity", 0);
-        d3.select(this).attr("fill", GO_COLOR);
-      });
   }
-
 
   function drawRadarBase() {
     const svg = d3.select("#radar-chart")
@@ -797,44 +735,4 @@ function createProteinModal() {
     const isMinimized = container.classList.contains('minimized');
 
     btn.textContent = isMinimized ? '+' : '−';
-  }
-
-  function plotSelectedLink(selectedLink) {
-    const svg = d3.select("#radar-chart");
-    const width = +svg.attr("width");
-    const height = +svg.attr("height");
-    const radius = 50;
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const angleSlice = (2 * Math.PI) / scoreFields.length;
-    const scale = d3.scaleLinear().domain([0, 1]).range([0, radius]);
-
-    svg.selectAll(".selected-link-line").remove();
-
-    const scoresArray = Array.isArray(selectedLink.scores) ? selectedLink.scores : [selectedLink.scores];
-
-    scoresArray.forEach((speciesScore, idx) => {
-      const points = scoreFields.map((field, i) => ({
-        axis: field,
-        value: speciesScore[field] || 0,
-        angle: i * angleSlice
-      }));
-
-      const line = d3.lineRadial()
-        .radius(d => scale(d.value))
-        .angle(d => d.angle)
-        .curve(d3.curveLinearClosed);
-
-      const linkColor = idx === 0 ? colorScale(selectedLink.score) : d3.interpolateRainbow(idx / scoresArray.length);
-
-      svg.append("path")
-        .datum(points)
-        .attr("class", "selected-link-line")
-        .attr("fill", linkColor)
-        .attr("fill-opacity", 0.2)
-        .attr("stroke", linkColor)
-        .attr("stroke-width", 2)
-        .attr("transform", `translate(${centerX},${centerY})`)
-        .attr("d", line);
-    });
   }

@@ -120,6 +120,7 @@ div.dg .cr.has-slider input[type="text"] {
   height: calc(100vh - 80px);
   max-height: calc(100vh - 80px);
   margin: 10px;
+  top: 10px;
   display: flex;
   flex-direction: column;
   background: #212529;
@@ -339,9 +340,9 @@ div.dg .cr.has-slider input[type="text"] {
 }
 
 .clusters-frame {
-  flex: 0 0 80px; 
-  max-width: 80px;
-  min-width: 80px;
+  flex: 0 0 130px; 
+  max-width: 130px;
+  min-width: 130px;
   display: flex;
   flex-direction:column;
   background: white;

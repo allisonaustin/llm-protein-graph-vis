@@ -83,28 +83,6 @@
 </div>
 
 <div id ="logo-images" style="visibility:visible;">
-  <div id="legend-confidence" class='edge-legend' style="position: fixed; z-index: 10; right: 40px; bottom: 35px; text-align: center;">
-    <strong>Association Score</strong>
-    <div style="width: 150px; height: 15px; background: linear-gradient(to right, var(--low-confidence), var(--high-confidence)); border: 1px solid #ccc;"></div>
-    <div style="display: flex; justify-content: space-between; font-size: 12px; color: white;">
-      <span>Low (0.0)</span>
-      <span>High (1.0)</span>
-    </div>
-  </div>
-
-  <div id="legend-validation" class='edge-legend' style="position: fixed; z-index: 10; right: 40px; bottom: 35px; text-align: center; display: none;">
-    <strong>Validation Source</strong>
-    <div style="display: flex; justify-content: space-evenly; margin-top: 4px;">
-      <div style="display: flex; align-items: center; gap: 5px;">
-        <span style="width: 10px; height: 10px; background: #40B0A6; display: inline-block; border: 1px solid #ccc;"></span>
-        <span style="color: white; font-size: 12px;">STRING</span>
-      </div>
-      <div style="display: flex; align-items: center; gap: 5px;">
-        <span style="width: 10px; height: 10px; background: #E1BE6A; display: inline-block; border: 1px solid #ccc;"></span>
-        <span style="color: white; font-size: 12px;">GO</span>
-      </div>
-    </div>
-  </div>
 
   <div id="tooltip" style="
     position: absolute;
@@ -130,6 +108,7 @@
 <script src="{{ url_for('static', filename='js/table.js') }}"></script>
 <script src="{{ url_for('static', filename='js/gui.js') }}"></script>
 <script src="{{ url_for('static', filename='js/panel.js') }}"></script>
+<script src="{{ url_for('static', filename='js/header.js') }}"></script>
 
 <script>
   // Initializing 3D object
@@ -212,12 +191,12 @@
   });
 
   // pause or resume data partitions load from backend
-  const playPauseBtn = document.getElementById('play-pause-btn');
-  playPauseBtn.addEventListener('click', () => {
-    pauseAnimation = !pauseAnimation;
-    playPauseBtn.innerHTML = pauseAnimation ? '<i id="play-pause-icon" class="bi bi-play-circle-fill"></i>' : '<i id="play-pause-icon" class="bi bi-pause-circle-fill"></i>';
-    console.log(pauseAnimation ? 'Pausing data load...' : 'Resuming data load...');
-  });
+  // const playPauseBtn = document.getElementById('play-pause-btn');
+  // playPauseBtn.addEventListener('click', () => {
+  //   pauseAnimation = !pauseAnimation;
+  //   playPauseBtn.innerHTML = pauseAnimation ? '<i id="play-pause-icon" class="bi bi-play-circle-fill"></i>' : '<i id="play-pause-icon" class="bi bi-pause-circle-fill"></i>';
+  //   console.log(pauseAnimation ? 'Pausing data load...' : 'Resuming data load...');
+  // });
 
   // main graph load and backend data update listener
   startDataLoad();

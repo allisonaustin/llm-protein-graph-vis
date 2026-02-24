@@ -1,6 +1,6 @@
 <div id="info-tab-header">
-    <span>Protein-Protein Interactions</span>
-    <button class="minimize-btn-icon" onclick="toggleInfoBody(event)">−</button>
+    <span>Info</span>
+    <button class="minimize-btn-icon" onclick="toggleInfoBody(event)">+</button>
   </div>
 
     <!-- Interaction score distribution -->
@@ -19,42 +19,12 @@
             <svg id="score-histogram"></svg>
           </div>
 
-          <div class="chart-frame radar-frame">
-            <div class="chart-header">
-              <span class="chart-title">STRING Scores</span>
-            </div>
-            <svg id="radar-chart"></svg>
-          </div>
-
           <div class="chart-frame clusters-frame">
             <div class="chart-header">
               <span class="chart-title">Clusters</span>
             </div>
             <div id="cluster-list">
             </div>
-          </div>
-        </div>
-
-        <div class="charts-row three-col">
-          <div class="chart-frame">
-            <div class="chart-header">
-              <span class="chart-title">Biological Processes</span>
-            </div>
-            <svg id="term-chart-BP" class="term-chart"></svg>
-          </div>
-
-          <div class="chart-frame">
-            <div class="chart-header">
-              <span class="chart-title">Molecular Functions</span>
-            </div>
-            <svg id="term-chart-MF" class="term-chart"></svg>
-          </div>
-
-          <div class="chart-frame">
-            <div class="chart-header">
-              <span class="chart-title">Cellular Components</span>
-            </div>
-            <svg id="term-chart-CC" class="term-chart"></svg>
           </div>
         </div>
       </div>
@@ -98,8 +68,7 @@
       <div id="tabs-wrapper" style="margin-left:auto; display:flex;">
         <button id="popout-table" style="height:25px;"><i class="bi bi-box-arrow-up-right" style="font-size:0.7em;"></i></button>
         <button id="tab-nodes" style="height:25px;" class="active-tab">Nodes</button>
-        <button id="tab-links-ver" style="height:25px;width:120px;">Verified Links</button>
-        <button id="tab-links-unver" style="height:25px;width:140px;">Unverified Links</button>
+        <button id="tab-links" style="height:25px;width:70px;">Links</button>
       </div>
     </div>
 
