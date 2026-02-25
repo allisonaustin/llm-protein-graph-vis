@@ -167,6 +167,9 @@ src/visg/static/js/sijax/
 !src/visg/static/data/interactions_full_run_static.dot
 !src/visg/static/data/graph_master_part100_*
 !src/visg/static/data/*.png
+!src/visg/static/data/*.txt
+
+9606.protein.links.v12.0.txt
 
 .idea/
 

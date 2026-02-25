@@ -7,8 +7,8 @@ const Settings = function() {
     this.ShowLinkDirections = false;
     this.ShowNodeNeighbors = false;
     this.ShowNodeInfo = false;
-    this.MinLinks = minLimit;
-    this.MaxLinks = maxLimit;
+    this.MaxDepth = 10;
+    this.MaxLinks = 3000;
     this.showAlLinks = true;
     this.NodeDistance = collisonStrengthVal;
     this.Layout = currLayout;
@@ -64,9 +64,13 @@ folder3.open()
 // });
 // folder5.open()
 
-folder6.add(settings, 'MinLinks', 0, 20000);
-folder6.add(settings, 'MaxLinks', 0, 4000000);
-folder6.add({ 'Enter': updateLinkCount }, 'Enter');
+folder6.add(settings, 'MaxDepth', 0, 20).step(1).onChange(() => {
+    updateDepth();
+});
+
+folder6.add(settings, 'MaxLinks', 0, maxLimit).step(1).onChange(() => {
+    updateSparsity();
+});
 folder6.open();
 
 setTimeout(() => {
@@ -117,9 +121,4 @@ function updateGUILabels(links) {
     const predictedLabel = `Generated (${genPercent}%)`;
     existingControllers['Generated'] = folder4.add(activeGroups, 'Generated').name(predictedLabel).onChange(updateLinkGroups);
     folder4.open();
-}
-
-// update graph when max and min links connecting the graph is specified
-function updateLinkCount(minLinks = settings.MinLinks, maxLinks = settings.MaxLinks) {
-    console.log("Setting min and max node links!", minLinks, maxLinks )
 }

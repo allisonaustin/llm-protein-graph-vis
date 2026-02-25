@@ -26,7 +26,6 @@ let showLinkParticle = false;
 let showNeighbors = false;
 let showNodeInfo = false;
 
-const adjacency = {};
 const timerV = 12000;
 let counter = 0;
 let counterStopAt = 195;
@@ -637,6 +636,39 @@ function reloadGraphData(reset = false, stopAt = counterStopAt) {
     }, timerV);
 }
 
+function calculateHubDepths() {
+    const { nodes } = Graph.graphData();
+    const nodeMap = new Map(nodes.map(n => [n.id, n]));
+
+    const degrees = nodes.map(n => n.neighbors.length).sort((a, b) => b - a);
+    const hubThreshold = degrees[10] || 20;
+
+    let queue = [];
+    nodes.forEach(n => {
+        if (n.neighbors.length >= hubThreshold) {
+            n.depth = 0;
+            queue.push(n.id); // Start BFS from all hubs simultaneously
+        } else {
+            n.depth = Infinity;
+        }
+    });
+
+    let head = 0;
+    while (head < queue.length) {
+        const nodeId = queue[head++];
+        const node = nodeMap.get(nodeId);
+        const currentDepth = node.depth;
+
+        node.neighbors.forEach(neighborId => {
+            const neighbor = nodeMap.get(neighborId);
+            if (neighbor && neighbor.depth === Infinity) {
+                neighbor.depth = currentDepth + 1;
+                queue.push(neighborId);
+            }
+        });
+    }
+}
+
 function stopFunction() {
     clearInterval(myInterval);
     console.log("my interval stopped", myInterval)
@@ -656,9 +688,6 @@ function resetGraph(){
     hoverNodes.clear();
     hoverNode = null;
     focusNode = null;
-    for (const key in adjacency) {
-        delete adjacency[key];
-    }
 }
 
 function startDataLoad(){
@@ -671,9 +700,7 @@ function startDataLoad(){
       $('#data-table tbody').empty();  
     }
 
-    updateLinkCount(minLimit, maxLimit);
     reloadGraphData()
-    settings.MinLinks = minLimit;
     settings.MaxLinks = maxLimit
 }
 
@@ -701,8 +728,13 @@ function addGraphData(dataPart, reset = false) {
         
         const sNode = dataPart.nodes.find(n => n.id === s);
         const tNode = dataPart.nodes.find(n => n.id === t);
+        
         if (sNode && !sNode.neighbors.includes(t)) sNode.neighbors.push(t);
         if (tNode && !tNode.neighbors.includes(s)) tNode.neighbors.push(s);
+        
+        // Importance = sum of neighbors. 
+        // Links between two hubs = high value. Links between two "leaves" = low value.
+        link.importance = (sNode?.neighbors?.length || 0) + (tNode?.neighbors?.length || 0);
     });
 
     const linkedNodeIds = new Set();
@@ -714,6 +746,7 @@ function addGraphData(dataPart, reset = false) {
     });
 
     dataPart.nodes = dataPart.nodes.filter(n => linkedNodeIds.has(n.id));
+    dataPart.links.sort((a,b) => (b.importance || 0) - (a.importance || 0));
 
     const { nodes, links } = Graph.graphData();
 
@@ -777,13 +810,17 @@ function addGraphData(dataPart, reset = false) {
         links: links.concat(dataPart.links)
     };
 
+    const adjacency = {};
     dataPart.links.forEach(link => {
-        const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-        if (!adjacency[sourceId]) adjacency[sourceId] = new Set();
-        if (!adjacency[targetId]) adjacency[targetId] = new Set();
-        adjacency[sourceId].add(targetId);
-        adjacency[targetId].add(sourceId);
+      const sourceId = (link.source && typeof link.source === 'object') ? link.source.id : link.source;
+      const targetId = (link.target && typeof link.target === 'object') ? link.target.id : link.target;
+      
+      if (sourceId && targetId) {
+          if (!adjacency[sourceId]) adjacency[sourceId] = new Set();
+          if (!adjacency[targetId]) adjacency[targetId] = new Set();
+          adjacency[sourceId].add(targetId);
+          adjacency[targetId].add(sourceId);
+      }
     });
 
     getConnectedComponents(result.nodes, adjacency);
@@ -851,6 +888,8 @@ function addGraphData(dataPart, reset = false) {
 
     Graph.graphData(result);
 
+    calculateHubDepths();
+
     if (currLayout === 'Spherical') applySphericalLayout(result.nodes);
     
     updateHighlight();
@@ -859,4 +898,44 @@ function addGraphData(dataPart, reset = false) {
 
 function refreshCharts() {
     if (typeof drawHistogram === "function") drawHistogram();
+}
+
+function updateSparsity() {
+  const { links, nodes } = Graph.graphData();
+  const maxAllowed = Math.min(Math.floor(settings.MaxLinks), links.length);
+
+  Graph.linkVisibility((link, index) => {
+      return index <= maxAllowed;
+  });
+
+  const visibleLinkSet = new Set();
+  const activeLinks = links.slice(0, maxAllowed);
+
+  activeLinks.forEach(l => {
+      const sId = typeof l.source === 'object' ? l.source.id : l.source;
+      const tId = typeof l.target === 'object' ? l.target.id : l.target;
+      visibleLinkSet.add(sId);
+      visibleLinkSet.add(tId);
+  });
+
+  Graph.nodeVisibility(node => visibleLinkSet.has(node.id));  
+  Graph.refresh();
+  setStats(visibleLinkSet.size, maxAllowed);
+}
+
+function updateDepth() {
+  const maxDepth = settings.MaxDepth;
+  const { nodes, links } = Graph.graphData();
+  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+  const visibleNodes = nodes.filter(n => n.depth <= maxDepth);
+  const visibleLinks = links.filter(l => {
+      const sId = typeof l.source === 'object' ? l.source.id : l.source;
+      const tId = typeof l.target === 'object' ? l.target.id : l.target;
+      const sNode = nodeMap.get(sId);
+      const tNode = nodeMap.get(tId);
+      return sNode && tNode && sNode.depth <= maxDepth && tNode.depth <= maxDepth;
+  });
+  Graph.nodeVisibility(node => node.depth <= maxDepth);
+  Graph.linkVisibility(link => visibleLinks.includes(link));
+  setStats(visibleNodes.length, visibleLinks.length); 
 }

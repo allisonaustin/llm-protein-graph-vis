@@ -21,6 +21,7 @@ from watchdog.events import FileSystemEventHandler
 import time
 import io
 import itertools
+import requests
 
 
 def check_file_updates(obj_response):
@@ -116,6 +117,23 @@ def get_protein_stats(obj_response):
 
     obj_response.script("setStats("+str(nlen)+","+str(llen)+")")
 
+def get_pdb_mappings(ensp_ids):
+    mapping = {}
+    for ensp_id in ensp_ids:
+        url = f"https://rest.ensembl.org/xrefs/id/{ensp_id}?external_db=PDB;content-type=application/json"
+        try:
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                pdb_list = [item['primary_id'] for item in data]
+                mapping[ensp_id] = pdb_list
+            else:
+                mapping[ensp_id] = []
+        except Exception:
+            mapping[ensp_id] = []
+            
+    return mapping
+
 @app.route('/api/list-presets')
 def list_presets():
     directory = os.path.join(current_app.static_folder, 'data')
@@ -172,8 +190,9 @@ def upload_ppi():
             
             if count >= 3000:
                 break
-                
-        return jsonify({"nodes": list(nodes_map.values()), "links": links})
+        
+        result = {"nodes": list(nodes_map.values()), "links": links}
+        return jsonify(result)
 
     except Exception as e:
         print(f"Error: {e}")

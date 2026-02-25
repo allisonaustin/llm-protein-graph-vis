@@ -118,39 +118,41 @@
 
   function getConnectedComponents(nodes, adjacency) {
     const visited = new Set();
-    const components = [];
-
     let clusterIndex = 0;
+    const nodeMap = new Map(nodes.map(n => [n.id, n]));
 
-    nodes.forEach(node => {
-      if (!visited.has(node.id)) {
-        const component = [];
-        const stack = [node.id];
+    nodes.forEach(startNode => {
+        if (!visited.has(startNode.id)) {
+            const stack = [startNode.id];
+            
+            const color = clusterColorScale(clusterIndex);
 
-        while (stack.length > 0) {
-          const current = stack.pop();
-          if (!visited.has(current)) {
-            visited.add(current);
-            component.push(current);
+            while (stack.length > 0) {
+                const currentId = stack.pop();
 
-            // Assign cluster color directly to node
-            const nodeObj = nodes.find(n => n.id === current);
-            if (nodeObj) {
-              nodeObj.clusterColor = clusterColorScale(clusterIndex);
-              nodeObj.clusterId = clusterIndex;
+                if (!visited.has(currentId)) {
+                    visited.add(currentId);
+                    
+                    const nodeObj = nodeMap.get(currentId);
+                    if (nodeObj) {
+                        nodeObj.clusterId = clusterIndex;
+                        nodeObj.clusterColor = color;
+                    }
+
+                    const neighbors = adjacency[currentId];
+                    if (neighbors) {
+                        for (const neighborId of neighbors) {
+                            if (!visited.has(neighborId)) {
+                                stack.push(neighborId);
+                            }
+                        }
+                    }
+                }
             }
-
-            adjacency[current]?.forEach(neighbor => {
-              if (!visited.has(neighbor)) {
-                stack.push(neighbor);
-              }
-            });
-          }
+            clusterIndex++;
         }
-        clusterIndex += 1;
-      }
     });
-  }
+}
 
   function setStats(nlen, llen){
     let intr = (llen <= 1) ? "interaction" : "interactions";

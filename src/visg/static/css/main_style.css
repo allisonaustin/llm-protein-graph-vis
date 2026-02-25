@@ -71,20 +71,23 @@ div.dg .cr.dropdown-controller .property-name {
   width: 85px !important;
 }
 
-div.dg .cr.has-slider .c {
-    width: calc(100% - 100px);
+div.dg .cr.has-slider .property-name {
+  width: 80px;
 }
 
-div.dg .cr.has-slider .property-name {
-  width: 100px !important;
+div.dg .cr.has-slider .c {
+  width: 60%; 
 }
 
 div.dg .cr.has-slider .slider {
-  width: 70px;
+  width: 50px;
+  float: right;
+  margin-right: 20px;
 }
 
 div.dg .cr.has-slider input[type="text"] {   
-  font-size: 14px;      
+  font-size: 14px; 
+  width: 40%;
 }
 
 .header {

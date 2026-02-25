@@ -5,6 +5,10 @@ document.getElementById('ppi-upload').addEventListener('change', function(event)
     let formData = new FormData();
     formData.append('file', file);
 
+    // resetting preset selector
+    const selector = document.getElementById('preset-file-selector');
+    selector.selectedIndex = 0;
+
     fetch('/upload_ppi', {
         method: 'POST',
         body: formData
@@ -13,6 +17,7 @@ document.getElementById('ppi-upload').addEventListener('change', function(event)
     .then(data => {
         addGraphData(data, true);
         setStats(data.nodes.length, data.links.length);
+        document.getElementById('ppi-upload').value = "";
     })
     .catch(error => console.error('Error:', error));
 });
@@ -23,7 +28,6 @@ function loadPresetList() {
     fetch('/api/list-presets')
         .then(res => res.json())
         .then(files => {
-            console.log(files);
             files.forEach(filename => {
                 const option = document.createElement('option');
                 option.value = `${filename}`;
