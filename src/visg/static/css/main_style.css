@@ -52,7 +52,7 @@ img {
 
 div.dg {
     width: 250px;  
-    font-size: medium;
+    font-size: small;
 }
 
 div.dg.ac {
@@ -86,8 +86,8 @@ div.dg .cr.has-slider .slider {
 }
 
 div.dg .cr.has-slider input[type="text"] {   
-  font-size: 14px; 
-  width: 40%;
+  font-size: 12px; 
+  width: 35%;
 }
 
 .header {

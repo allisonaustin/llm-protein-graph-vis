@@ -1,9 +1,10 @@
 let Graph; 
 const highlightNodes = new Set(); 
 const highlightLinks = new Set();
-let hoverNodes = new Set(); // selected (red) nodes
-let hoverNode = null; // single selected (red) node
+let hoverNode = null; // single selected node
 let focusNode = null;
+
+let nodeMap = new Map();
 
 var activeLink = null;
 var activeLinks = new Set(['red', 'orange', 'blue', 'green', 'gray']); // for custom edge coloring
@@ -29,6 +30,7 @@ let showNodeInfo = false;
 const timerV = 12000;
 let counter = 0;
 let counterStopAt = 195;
+let globalHubThreshold;
 const initData = {
     nodes: [],
     links: []
@@ -71,6 +73,17 @@ function initGraph() {
             }
             return label;
           })
+          .nodeColor(node => {
+            if(highlightNodes.has(node.id)){
+              if(focusNode === node) {
+                return HIGHLIGHT_COLOR;
+              }else{
+                return '#FFA000';
+              }
+            }else{
+              return "white";
+            }
+          })
           .nodeResolution(20)
           .linkColor(link => link.score ? colorScale(link.score) : 'gray')
           .linkOpacity(1)
@@ -109,18 +122,24 @@ function initGraph() {
               // Set the single hovered node
               hoverNode = node.id;
               showNodeLabel(node);
+              highlightTableRow(node.id);
+              if (settings.PruningMode == 'Neighborhood') {
+                calculateNodeDepths(node.id);
+                applyNeighborhoodPruning();
+              }
             } else {
               clearNodeLabels();
               hoverNode = null;
             }
             updateHighlight();
-            console.log("Node selected:", node.id)
+            // console.log("Node selected:", node.id)
           })
           .onNodeRightClick((node, event) => {
             if (event) event.preventDefault(); 
             if (!node) return;
             focusNode = node;
             highlightNodes.add(node.id);
+            updateHighlight();
             showCustomContextMenu(node, event.clientX, event.clientY);
           })
           .onLinkClick(link => {
@@ -176,7 +195,7 @@ function initGraph() {
         );
     } 
 
-    rebuildTable([" ", "Protein IDs", "Link Count"]);
+    rebuildTable(NODE_TABLE_COLS);
 }
 
 function showNodeLabel(node) {
@@ -331,6 +350,10 @@ function searchAndFocusNode(query) {
 
         hoverNode = node.id;
         showNodeLabel(node);
+        if (settings.PruningMode == 'Neighborhood') {
+          calculateNodeDepths(node.id);
+          applyNeighborhoodPruning();
+        }
       }
       updateHighlight();
     } else {
@@ -546,11 +569,14 @@ const toggleLinkWidth = () => {
         .linkWidth(Graph.linkWidth())
 }
 
+const toggleClusterColors = () => {
+    clusterColors = !clusterColors;
+}
+
 // Toggle Link Particles
 const toggleLinkAnimation = () => {
     if(!showLinkParticle){
       highlightNodes.clear();
-      hoverNodes.clear();
       highlightLinks.clear();
       updateHighlight();
     }
@@ -568,6 +594,21 @@ const clearHighlights = () => {
     highlightLinks.clear();
     updateHighlight();
     clearNodeLabels();
+    if (settings.PruningMode == "Neighborhood") {
+      clearPruning();
+    }
+    $('#data-table tbody tr.highlight-node').removeClass('highlight-node');
+}
+
+function clearPruning() {
+    const { nodes, links } = Graph.graphData();
+    nodes.forEach(n => {
+        n.depth = 0;
+    });
+    Graph.nodeVisibility(true);
+    Graph.linkVisibility(true);
+    setStats(nodes.length, links.length);
+    Graph.refresh();
 }
 
 function filterLinkByColor(link) {
@@ -636,37 +677,84 @@ function reloadGraphData(reset = false, stopAt = counterStopAt) {
     }, timerV);
 }
 
-function calculateHubDepths() {
+function runBFS(rootId) {
     const { nodes } = Graph.graphData();
-    const nodeMap = new Map(nodes.map(n => [n.id, n]));
+    
+    nodes.forEach(n => n.depth = Infinity);
 
-    const degrees = nodes.map(n => n.neighbors.length).sort((a, b) => b - a);
-    const hubThreshold = degrees[10] || 20;
+    const rootNode = globalNodeMap.get(rootId);
+    if (!rootNode) return;
 
-    let queue = [];
-    nodes.forEach(n => {
-        if (n.neighbors.length >= hubThreshold) {
-            n.depth = 0;
-            queue.push(n.id); // Start BFS from all hubs simultaneously
-        } else {
-            n.depth = Infinity;
-        }
-    });
+    rootNode.depth = 0;
+    const queue = [rootNode];
 
-    let head = 0;
-    while (head < queue.length) {
-        const nodeId = queue[head++];
-        const node = nodeMap.get(nodeId);
-        const currentDepth = node.depth;
-
-        node.neighbors.forEach(neighborId => {
-            const neighbor = nodeMap.get(neighborId);
-            if (neighbor && neighbor.depth === Infinity) {
-                neighbor.depth = currentDepth + 1;
-                queue.push(neighborId);
+    while (queue.length > 0) {
+        const curr = queue.shift();
+        
+        curr.neighbors.forEach(neighborId => {
+            const neighborNode = globalNodeMap.get(neighborId);
+            if (neighborNode && neighborNode.depth === Infinity) {
+                neighborNode.depth = curr.depth + 1;
+                queue.push(neighborNode);
             }
         });
     }
+}
+
+// getting depths of each node from a single node (rootId)
+function calculateNodeDepths(rootId) {
+    runBFS(rootId); 
+}
+
+function applyNeighborhoodPruning() {
+    const { links } = Graph.graphData();
+    const maxD = settings.MaxDepth;
+
+    const visibleLinks = links.filter(l => {
+        const s = l.source;
+        const t = l.target;
+
+        return (s.depth !== undefined && s.depth <= maxD) && 
+               (t.depth !== undefined && t.depth <= maxD);
+    });
+
+    const visibleNodeIds = new Set();
+    visibleLinks.forEach(l => {
+        visibleNodeIds.add(l.source.id || l.source);
+        visibleNodeIds.add(l.target.id || l.target);
+    });
+
+    // 3. Update the Graph View
+    const visibleLinksSet = new Set(visibleLinks);
+    Graph.linkVisibility(link => visibleLinksSet.has(link));
+    Graph.nodeVisibility(node => visibleNodeIds.has(node.id));
+
+    // 4. Update UI
+    setStats(visibleNodeIds.size, visibleLinks.length);
+    Graph.refresh();
+}
+
+function applyLinkFilters() {
+  const { links, nodes } = Graph.graphData();
+  const maxAllowed = Math.min(Math.floor(settings.MaxLinks), links.length);
+
+  Graph.linkVisibility((link, index) => {
+      return index <= maxAllowed;
+  });
+
+  const visibleLinkSet = new Set();
+  const activeLinks = links.slice(0, maxAllowed);
+
+  activeLinks.forEach(l => {
+      const sId = typeof l.source === 'object' ? l.source.id : l.source;
+      const tId = typeof l.target === 'object' ? l.target.id : l.target;
+      visibleLinkSet.add(sId);
+      visibleLinkSet.add(tId);
+  });
+
+  Graph.nodeVisibility(node => visibleLinkSet.has(node.id));  
+  Graph.refresh();
+  setStats(visibleLinkSet.size, maxAllowed);
 }
 
 function stopFunction() {
@@ -685,23 +773,16 @@ function resetGraph(){
     document.body.classList.remove('has-data');
     highlightNodes.clear();
     highlightLinks.clear();
-    hoverNodes.clear();
     hoverNode = null;
     focusNode = null;
 }
 
-function startDataLoad(){
-    resetGraph();
-
-    // reset chart svgs and table
-    d3.select("#score-histogram").selectAll("*").remove();
-    if ($.fn.DataTable.isDataTable('#data-table')) {
-      $('#data-table').DataTable().destroy();
-      $('#data-table tbody').empty();  
-    }
-
-    reloadGraphData()
-    settings.MaxLinks = maxLimit
+function initializeGraphPointers() {
+    const { nodes } = Graph.graphData();
+    globalNodeMap = new Map(nodes.map(n => [n.id, n]));
+    
+    const degrees = nodes.map(n => n.neighbors.length).sort((a, b) => b - a);
+    globalHubThreshold = degrees[10] || 20;
 }
 
 function addGraphData(dataPart, reset = false) {
@@ -829,7 +910,8 @@ function addGraphData(dataPart, reset = false) {
     const nlen = result.nodes ? new Set(result.nodes.map(n => n.id)).size : 0;
     const llen = result.links ? getUniqueLinks(result.links).length : 0;
 
-    setStats(nlen, llen);
+    // settings.MaxLinks = llen;
+    // setStats(nlen, llen);
 
     const nodeClusterMap = {};
     result.nodes.forEach(node => {
@@ -880,7 +962,7 @@ function addGraphData(dataPart, reset = false) {
       return group;
     });
 
-    rebuildTable([" ", "Protein IDs", "Link Count"]);
+    rebuildTable(NODE_TABLE_COLS);
     if (currTable == 'Nodes') populateNodeTable(newNodes);
     else if (currTable == 'Links') populateLinkTable(dataPart.links);
 
@@ -888,8 +970,9 @@ function addGraphData(dataPart, reset = false) {
 
     Graph.graphData(result);
 
-    calculateHubDepths();
-
+    initializeGraphPointers();
+    applyLinkFilters();
+    
     if (currLayout === 'Spherical') applySphericalLayout(result.nodes);
     
     updateHighlight();
@@ -898,44 +981,4 @@ function addGraphData(dataPart, reset = false) {
 
 function refreshCharts() {
     if (typeof drawHistogram === "function") drawHistogram();
-}
-
-function updateSparsity() {
-  const { links, nodes } = Graph.graphData();
-  const maxAllowed = Math.min(Math.floor(settings.MaxLinks), links.length);
-
-  Graph.linkVisibility((link, index) => {
-      return index <= maxAllowed;
-  });
-
-  const visibleLinkSet = new Set();
-  const activeLinks = links.slice(0, maxAllowed);
-
-  activeLinks.forEach(l => {
-      const sId = typeof l.source === 'object' ? l.source.id : l.source;
-      const tId = typeof l.target === 'object' ? l.target.id : l.target;
-      visibleLinkSet.add(sId);
-      visibleLinkSet.add(tId);
-  });
-
-  Graph.nodeVisibility(node => visibleLinkSet.has(node.id));  
-  Graph.refresh();
-  setStats(visibleLinkSet.size, maxAllowed);
-}
-
-function updateDepth() {
-  const maxDepth = settings.MaxDepth;
-  const { nodes, links } = Graph.graphData();
-  const nodeMap = new Map(nodes.map(n => [n.id, n]));
-  const visibleNodes = nodes.filter(n => n.depth <= maxDepth);
-  const visibleLinks = links.filter(l => {
-      const sId = typeof l.source === 'object' ? l.source.id : l.source;
-      const tId = typeof l.target === 'object' ? l.target.id : l.target;
-      const sNode = nodeMap.get(sId);
-      const tNode = nodeMap.get(tId);
-      return sNode && tNode && sNode.depth <= maxDepth && tNode.depth <= maxDepth;
-  });
-  Graph.nodeVisibility(node => node.depth <= maxDepth);
-  Graph.linkVisibility(link => visibleLinks.includes(link));
-  setStats(visibleNodes.length, visibleLinks.length); 
 }

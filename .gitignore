@@ -169,7 +169,7 @@ src/visg/static/js/sijax/
 !src/visg/static/data/*.png
 !src/visg/static/data/*.txt
 
-9606.protein.links.v12.0.txt
+*.protein.links.v12.0.txt
 
 .idea/
 

@@ -4,6 +4,7 @@ document.getElementById('ppi-upload').addEventListener('change', function(event)
 
     let formData = new FormData();
     formData.append('file', file);
+    formData.append('maxLimit', maxLimit);
 
     // resetting preset selector
     const selector = document.getElementById('preset-file-selector');
@@ -16,7 +17,6 @@ document.getElementById('ppi-upload').addEventListener('change', function(event)
     .then(response => response.json())
     .then(data => {
         addGraphData(data, true);
-        setStats(data.nodes.length, data.links.length);
         document.getElementById('ppi-upload').value = "";
     })
     .catch(error => console.error('Error:', error));
@@ -54,6 +54,7 @@ document.getElementById('preset-file-selector').addEventListener('change', funct
         .then(blob => {
             let formData = new FormData();
             formData.append('file', blob, fileName);
+            formData.append('maxLimit', maxLimit);
 
             return fetch('/upload_ppi', {
                 method: 'POST',
@@ -63,7 +64,6 @@ document.getElementById('preset-file-selector').addEventListener('change', funct
         .then(response => response.json())
         .then(data => {
             addGraphData(data, true);
-            setStats(data.nodes.length, data.links.length);
         })
         .catch(error => {
             console.error('Error:', error);

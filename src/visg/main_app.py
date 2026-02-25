@@ -149,6 +149,7 @@ def upload_ppi():
         return jsonify({"error": "No file"}), 400
     
     file = request.files['file']
+    maxLimit = request.form.get('maxLimit', type=int, default=3000)
     nodes_map = {}
     links = []
     
@@ -172,8 +173,8 @@ def upload_ppi():
             except ValueError:
                 continue
 
-            # Filtering for High Confidence (e.g., 700+)
-            if score >= 700:
+            # Filtering by confidence
+            if score >= 500:
                 if p1 not in nodes_map: 
                     nodes_map[p1] = {"id": p1, "origin": file.filename, "originType": "File", "clusterColor": "#00a2ff"}
                 if p2 not in nodes_map: 
@@ -188,7 +189,7 @@ def upload_ppi():
                 })
                 count += 1
             
-            if count >= 3000:
+            if count >= maxLimit:
                 break
         
         result = {"nodes": list(nodes_map.values()), "links": links}

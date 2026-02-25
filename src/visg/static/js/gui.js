@@ -1,6 +1,6 @@
 // set up vis for GUI
 var numLayers = 4; // for concentric spherical layout
-var clusterColors = true; // cluster colors on/off
+var clusterColors = false; // cluster colors on/off
 
 //Define GUI and functions
 const Settings = function() {
@@ -13,7 +13,9 @@ const Settings = function() {
     this.NodeDistance = collisonStrengthVal;
     this.Layout = currLayout;
     this.NumLayers = numLayers;
-    this.clusterColors = clusterColors;
+    this.ShowClusterColors = clusterColors;
+    this.FocusDepth = 1;
+    this.PruningMode = 'Neighborhood';
 };  
 
 const settings = new Settings();
@@ -25,9 +27,7 @@ guiContainer.appendChild(gui.domElement);
 var layerController = null;
 
 var folder3 = gui.addFolder('GUI Buttons');
-var folder4 = gui.addFolder('Edge Filtering');
-// var folder5 = gui.addFolder('Settings');
-var folder6 = gui.addFolder('Sparse Layout Settings');
+var folder4 = gui.addFolder('Filtering');
 
 folder3.add({ 'Zoom to Fit': zoomToFit }, 'Zoom to Fit');
 folder3.add({ 'Clear Highlights': clearHighlights }, 'Clear Highlights');
@@ -37,41 +37,41 @@ folder3.add(settings, 'ShowLinkDirections')
 folder3.add(settings, 'ShowNodeNeighbors')
     .name('Show Node Neighbors')
     .onChange(showNodeNeighbors);
+folder3.add(settings, 'ShowClusterColors')
+    .name('Show Cluster Colors')
+    .onChange(toggleClusterColors);
 folder3.open()
 
-// folder5.add(settings, 'Layout', ['Force-Directed', 'Spherical']).onChange(val => {
-//     if (layerController) {
-//         folder5.remove(layerController);
-//         layerController = null;
-//     }
-//     if (val === 'Force-Directed') {
-//         applyForceDirectedLayout();
-//         currLayout = 'Force-Directed';
-//     } else if (val === 'Spherical') {
-//         applySphericalLayout(Graph.graphData().nodes);
-//         Graph.graphData(Graph.graphData());
-//         currLayout = 'Spherical';
-//         layerController = folder5
-//         .add(settings, "NumLayers", 1, 10, 1)
-//         .name('Layers')
-//             .onChange(val => {
-//                 numLayers = val;
-//                 applySphericalLayout(Graph.graphData().nodes, val);
-//                 Graph.graphData(Graph.graphData());
-//             });
-//         layerController.setValue(settings.NumLayers);
-//     }
-// });
-// folder5.open()
+const pruningController = folder4.add(settings, 'PruningMode', ['Global', 'Neighborhood'])
+    .name('Pruning Mode')
+const depthController = folder4.add(settings, 'MaxDepth', 0, 20)
+    .step(1)
+    .name('MaxDepth')
+const linksController = folder4.add(settings, 'MaxLinks', 0, maxLimit).step(1)
+    .onChange(applyLinkFilters);
+folder4.open();
 
-folder6.add(settings, 'MaxDepth', 0, 20).step(1).onChange(() => {
-    updateDepth();
+function toggleDepthControl() {
+    const depthRow = depthController.domElement.parentElement.parentElement;
+    const maxLinksRow = linksController.domElement.parentElement.parentElement;
+
+    if (settings.PruningMode === 'Neighborhood') {
+        depthRow.style.display = ''; 
+        maxLinksRow.style.display = 'none';
+    } else {
+        depthRow.style.display = 'none'; 
+        maxLinksRow.style.display = '';
+        clearPruning();
+        applyLinkFilters();
+    }
+}
+
+pruningController.onChange((value) => {
+    toggleDepthControl();
 });
 
-folder6.add(settings, 'MaxLinks', 0, maxLimit).step(1).onChange(() => {
-    updateSparsity();
-});
-folder6.open();
+depthController.onChange(applyNeighborhoodPruning);
+toggleDepthControl();
 
 setTimeout(() => {
     document.querySelectorAll('div.dg .cr select').forEach(sel => {
@@ -120,5 +120,5 @@ function updateGUILabels(links) {
     }
     const predictedLabel = `Generated (${genPercent}%)`;
     existingControllers['Generated'] = folder4.add(activeGroups, 'Generated').name(predictedLabel).onChange(updateLinkGroups);
-    folder4.open();
+    // folder4.open();
 }

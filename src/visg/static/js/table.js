@@ -31,7 +31,10 @@ function rebuildTable(columns) {
       info: false,
       scrollY: $('#table-container').height(),
       scrollX: true,
-      scrollCollapse: true
+      scrollCollapse: true,
+      columnDefs: [ // hide the last two columns (full node ID, cluster) or (sourceId, targetId)
+        { targets: [columns.length - 2, columns.length - 1], visible: false, searchable: true }
+      ]
     });
 
     if (searchQuery) {
@@ -65,14 +68,24 @@ function populateNodeTable(newNodes) {
             const inD = Array.isArray(node.in_degree) ? node.in_degree.length : 0;
             const outD = Array.isArray(node.out_degree) ? node.out_degree.length : 0;
             const totalLinks = inD + outD;
+            const nodeId = node.id.split('.')[1]? node.id.split('.')[1] : node.id; // 10090.ENSMUSP00000000312 -> ENSMUSP00000000312
             const clusterCell = `<div style="display:flex; justify-content:flex-end;"><span style="width:10px;height:10px;background-color:${node.clusterColor};border-radius:50%;opacity:0.5;"></span></div>`;           
-            dataTable.row.add([clusterCell, node.id, totalLinks]);
+            dataTable.row.add([
+              clusterCell, 
+              nodeId, 
+              totalLinks, 
+              node.id, // hidden
+              `cluster ${node.clusterId}` // hidden
+            ]);
         }
     });
     $('#data-table tbody').off('click', 'tr');
     $('#data-table tbody').on('click', 'tr', function () {
         const rowData = dataTable.row(this).data();
-        if (rowData && rowData[1]) searchAndFocusNode(rowData[1]);  
+        if (rowData && rowData[3]) {
+          searchAndFocusNode(rowData[3]);  
+          highlightTableRow(rowData[3]);
+        }
     });
     dataTable.draw();
 }
@@ -85,22 +98,18 @@ function populateLinkTable(links) {
     $('#data-table tbody').on('click', 'tr', function () {
       const rowData = dataTable.row(this).data();
       if (rowData) {
-        const sourceId = rowData[1];
-        const targetId = rowData[2];
+        const sourceId = rowData[LINK_TABLE_COLS.length - 2];
+        const targetId = rowData[LINK_TABLE_COLS.length - 1];
         searchAndFocusLink(sourceId, targetId);
-        const graphLinks = Graph.graphData().links;
-        // searching for link in graph data
-        const matchedLink = graphLinks.find(link => {
-          const src = typeof link.source === 'object' ? link.source.id : link.source;
-          const tgt = typeof link.target === 'object' ? link.target.id : link.target;
-          return (src === sourceId && tgt === targetId);
-        });
       }
     });
 
     const data = links.map(link => {
         const source = typeof link.source === 'object' ? link.source.id : link.source;
         const target = typeof link.target === 'object' ? link.target.id : link.target;
+        const sourceId = source.split('.')[1]? source.split('.')[1] : source;
+        const targetId = target.split('.')[1]? target.split('.')[1] : target;
+
         const score = link.score != null ? link.score : 0;
         const color = colorScale ? colorScale(score) : 'white';
 
@@ -116,14 +125,57 @@ function populateLinkTable(links) {
         
         return [
             clusterCell, 
-            source,
-            target,
+            sourceId,
+            targetId,
+            species,
             `<span style="color: ${color}; font-weight: bold;">${score.toFixed(3)}</span>`,
             sourceDataUrl,
-            details || ''
+            details || '',
+            source, // hidden
+            target, // hidden
         ];
     });
     dataTable.rows.add(data).draw();
+}
+
+function highlightTableRow(nodeId) {
+    const table = $('#data-table').DataTable();
+    
+    table.rows().nodes().to$().removeClass('highlight-node');
+    table.rows().every(function() {
+        const data = this.data();
+        if (data[3] === nodeId) {
+            const rowNode = this.node();
+            $(rowNode).addClass('highlight-node');
+            rowNode.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+        }
+    });
+}
+
+function applyHighlights() {
+    if (!hoverNode) return;
+
+    const table = $('#data-table').DataTable();
+    const isNodeTable = (currTable === 'Nodes');
+
+    table.rows().every(function() {
+        const rowData = this.data();
+        let shouldHighlight = false;
+
+        if (isNodeTable) {
+            shouldHighlight = (rowData[3] === hoverNode);
+        } else {
+            shouldHighlight = (rowData[7] === hoverNode || rowData[8] === hoverNode);
+        }
+
+        if (shouldHighlight) {
+            const rowNode = this.node();
+            $(rowNode).addClass('highlight-node');            
+            if (isNodeTable) {
+                rowNode.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+            }
+        }
+    });
 }
 
 // tab switching
@@ -131,16 +183,18 @@ $('#tab-nodes').on('click', () => {
     $('#tab-nodes').addClass('active-tab');
     $('#tab-links').removeClass('active-tab');
     currTable = 'Nodes';
-    rebuildTable([" ", "Ensembl Protein IDs", "Link Count"]);
+    rebuildTable(NODE_TABLE_COLS);
     populateNodeTable(Graph.graphData().nodes);
+    applyHighlights();
 });
 
 $('#tab-links').on('click', () => {
     $('#tab-links').addClass('active-tab');
     $('#tab-nodes').removeClass('active-tab');
     currTable = 'Links';
-    rebuildTable([" ", "ProteinA", "ProteinB", "Score", "Lookup", "Details"]);
+    rebuildTable(LINK_TABLE_COLS);
     populateLinkTable(Graph.graphData().links);
+    applyHighlights();
 });
 
 document.getElementById("popout-table").addEventListener("click", () => {

@@ -71,3 +71,8 @@
 .data-link:hover {
   border-bottom-style: solid; 
 }
+
+table.dataTable tbody tr.highlight-node {
+    background-color: rgba(238, 245, 44, 0.3) !important; 
+    font-weight: bold;
+}
