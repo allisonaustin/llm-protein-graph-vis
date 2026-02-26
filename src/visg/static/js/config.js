@@ -11,5 +11,5 @@ const color8 = "#F3A9"; // for redefining color shades
 const colorScale = d3.scaleLinear()
     .domain([0, 1.0])  
     .range(COLOR_SCALE);
-const NODE_TABLE_COLS = [" ", "Ensembl Protein IDs", "Link Count", "ENSP_full", "ClusterID"];
-const LINK_TABLE_COLS = [" ", "ProteinA", "ProteinB", "Species", "Score", "Lookup", "Details", "ProteinA_full", "ProteinB_full"];
+const NODE_TABLE_COLS = [" ", "Protein IDs", "Link Count", "ENSP_full", "ClusterID"];
+const LINK_TABLE_COLS = [" ", "ProteinA", "ProteinB", "Score", "Species", "Lookup", "Details", "ProteinA_full", "ProteinB_full"];

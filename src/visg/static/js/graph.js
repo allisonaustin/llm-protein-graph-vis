@@ -123,6 +123,7 @@ function initGraph() {
               hoverNode = node.id;
               showNodeLabel(node);
               highlightTableRow(node.id);
+              updatePredictionUI(node.id);
               if (settings.PruningMode == 'Neighborhood') {
                 calculateNodeDepths(node.id);
                 applyNeighborhoodPruning();
@@ -350,6 +351,7 @@ function searchAndFocusNode(query) {
 
         hoverNode = node.id;
         showNodeLabel(node);
+        updatePredictionUI(node.id);
         if (settings.PruningMode == 'Neighborhood') {
           calculateNodeDepths(node.id);
           applyNeighborhoodPruning();
@@ -589,11 +591,12 @@ const toggleLinkAnimation = () => {
 }
 
 const clearHighlights = () => {
-
+    hoverNode = null;
     highlightNodes.clear();
     highlightLinks.clear();
     updateHighlight();
     clearNodeLabels();
+    updatePredictionUI(null);
     if (settings.PruningMode == "Neighborhood") {
       clearPruning();
     }
@@ -707,6 +710,8 @@ function calculateNodeDepths(rootId) {
 }
 
 function applyNeighborhoodPruning() {
+  console.log(hoverNode);
+    if (!hoverNode) return;
     const { links } = Graph.graphData();
     const maxD = settings.MaxDepth;
 
@@ -976,9 +981,9 @@ function addGraphData(dataPart, reset = false) {
     if (currLayout === 'Spherical') applySphericalLayout(result.nodes);
     
     updateHighlight();
-    refreshCharts();
+    // refreshCharts();
 }
 
 function refreshCharts() {
-    if (typeof drawHistogram === "function") drawHistogram();
+    // if (typeof drawHistogram === "function") drawHistogram();
 }

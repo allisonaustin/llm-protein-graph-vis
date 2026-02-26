@@ -153,6 +153,7 @@ function closeProteinModal(fullId) {
 
 function updateClusterList(nodeClusterMap) {
   const container = d3.select("#cluster-list");
+  if (!container) return;
   container.selectAll("*").remove(); 
 
   const colorCounts = {};
@@ -208,6 +209,7 @@ function updateClusterList(nodeClusterMap) {
 
 function drawHistogram() {
   const svg = d3.select("#score-histogram");
+  if (!svg) return;
   const container = svg.node().closest(".chart-frame");
   const width = container.clientWidth;
   const height = 140;
@@ -261,7 +263,7 @@ function drawHistogram() {
     .domain([0, maxCount])
     .range([innerHeight, 0]);
 
-  const barWidth = (x(thresholds[1]) - x(thresholds[0])) / 2 - 1;
+  const barWidth = (x(thresholds[1]) - x(thresholds[0])) - 1;
 
   const chartG = svg.select(".chart-layer");
 
@@ -291,6 +293,43 @@ function drawHistogram() {
       tooltip.style("opacity", 0);
       d3.select(this).attr("fill", STRING_COLOR);
     });
+}
+
+async function requestLLMPrediction(nodeId) {
+  const history = document.getElementById('chat-history');
+  history.innerHTML += `<p><b>System:</b> Querying interactions for ${nodeId}...</p>`;
+  const res = await fetch('/api/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ protein_id: nodeId })
+    });
+
+    const data = await res.json();
+    const chatElem = document.createElement('p');
+    chatElem.innerHTML = `<b>Model:</b> <span>${data.raw_chat.replace(/\n/g, '<br>')}</span>`;
+    history.appendChild(chatElem);
+    history.scrollTop = history.scrollHeight;
+
+    console.log('New graph data:', data);
+
+    // if (data.nodes.length > 0) {
+    //     addGraphData({ nodes: data.nodes, links: data.links });
+    // }
+}
+
+function updatePredictionUI(nodeId) {
+    const statusText = document.getElementById('prediction-status');
+    const predictBtn = document.getElementById('btn-predict');
+
+    if (nodeId) {
+        const displayId = nodeId.split('.')[1]? nodeId.split('.')[1] : nodeId; 
+        statusText.innerHTML = `Predict interacting partners of <b style="color: #2fa1d6;">${displayId}</b>`;
+        predictBtn.style.display = 'block'; 
+        predictBtn.onclick = () => requestLLMPrediction(nodeId);
+    } else {
+        statusText.textContent = "Select a node to generate predictions";
+        predictBtn.style.display = 'none'; 
+    }
 }
 
 async function sendChat() {
@@ -351,18 +390,16 @@ async function sendChat() {
       }
     }
   }
-
-  // When streaming finishes, convert full Markdown buffer to HTML
   replyContainer.innerHTML = marked.parse(markdownBuffer);
 }
 
-const chatInput = document.getElementById("chat-input");
+// const chatInput = document.getElementById("chat-input");
 
-chatInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    sendChat();
-  }
-});
+// chatInput.addEventListener("keydown", (e) => {
+//   if (e.key === "Enter") {
+//     sendChat();
+//   }
+// });
 
 function toggleInfoBody(event) {
   const container = document.getElementById('protein-info-container');

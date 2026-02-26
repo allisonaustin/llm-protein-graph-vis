@@ -2,7 +2,7 @@
 const collisonStrengthVal = 10;
 const bckColor = '#000000';//"#242124"//raisin black //"#1B1212" //licorice//'#28282B';//matte black//'#00000f';//black
 const minLimit = 0;
-const maxLimit = 4000;
+const maxLimit = 7000;
 
 const getChunks = (arr, perChunk= 5) => {
 

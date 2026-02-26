@@ -127,8 +127,8 @@ function populateLinkTable(links) {
             clusterCell, 
             sourceId,
             targetId,
-            species,
             `<span style="color: ${color}; font-weight: bold;">${score.toFixed(3)}</span>`,
+            species,
             sourceDataUrl,
             details || '',
             source, // hidden

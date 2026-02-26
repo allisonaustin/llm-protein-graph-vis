@@ -4,7 +4,7 @@
   </div>
 
     <!-- Interaction score distribution -->
-    <div class="card-header collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-hist">
+    <!-- <div class="card-header collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-hist">
       <span>Network Overview</span>
       <i class="chevron-icon bi bi-chevron-down"></i>
     </div>
@@ -30,22 +30,30 @@
           </div>
         </div>
       </div>
-    </div>
+    </div> -->
 
   <div class="card-header collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-chat">
     <span>LLM</span>
-    <i class="chevron-icon bi bi-chevron-right"></i>
+    <i class="chevron-icon bi bi-chevron-down"></i>
   </div>
-  <div id="collapse-chat" class="collapse">
+  <div id="prediction-container" style="padding: 10px;">
+      <p id="prediction-status" style="font-style: italic; font-size: 14px; color: #ccc; margin-bottom: 8px;">
+          Select a node to generate predictions
+      </p>
+      <button id="btn-predict">
+          Generate
+      </button>
+    </div>
+  <div id="collapse-chat" class="collapse show">
     <div id="chat-history" style="height: 120px; font-size: 0.9rem;"></div>
-    <div class="card-footer d-flex p-2 bg-dark">
+    <!-- <div class="card-footer d-flex p-2 bg-dark">
       <div id="chat-help" class="help-icon" data-bs-toggle="tooltip" data-bs-placement="top">
         <i class="bi bi-question-circle-fill"></i>
       </div>
       <div class="help-tooltip">This chat allows you to interact with an AI assistant.</div>
       <input type="text" id="chat-input" class="form-control me-2 bg-secondary text-white border" placeholder="Type a question...">
       <button class="btn btn-sm btn-outline-light" onclick="sendChat()">Send</button>
-    </div>
+    </div> -->
   </div>
 
     <!-- Graph Tables -->

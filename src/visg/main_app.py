@@ -23,7 +23,6 @@ import io
 import itertools
 import requests
 
-
 def check_file_updates(obj_response):
 
     if watchFlag:
@@ -134,6 +133,36 @@ def get_pdb_mappings(ensp_ids):
             
     return mapping
 
+def create_system_prompt():
+    """
+    Create the system prompt for protein interaction queries.
+    This could be enhanced with additional context or instructions.
+    """
+    return "You are a helpful assistant specialized in molecular biology and protein interactions. When asked about protein interactions, provide clear, concise lists of interacting proteins with brief explanations. Focus on generating accurate protein names that are commonly used in databases and literature."
+
+def create_user_prompt(protein_name):
+    """
+    Create the user prompt for a specific protein.
+    
+    Args:
+        protein_name (str): The name of the protein to query about
+        
+    Returns:
+        str: The formatted user prompt
+    """
+    base_prompt = (
+        "List proteins that might interact with {protein}. "
+        "Please provide a simple list of protein names (gene symbols/names) "
+        "that could potentially interact with {protein}, along with a brief "
+        "reason for each interaction. Be specific and accurate in your reasoning."
+        "Focus on well-known, documented interactions. "
+        "For each interaction, write the interacting protein first, then a dash '-', "
+        "then a brief description of the interaction type."
+        "Do not repeat {protein} as the interacting protein."
+        "Format your response as: INTERACTING_PROTEIN_NAME - brief description of interaction type."
+    )
+    return base_prompt.format(protein=protein_name)
+
 @app.route('/api/list-presets')
 def list_presets():
     directory = os.path.join(current_app.static_folder, 'data')
@@ -198,6 +227,148 @@ def upload_ppi():
     except Exception as e:
         print(f"Error: {e}")
         return jsonify({"error": str(e)}), 500
+    
+def check_string_bulk(source_id, suggested_ids, species=9606):
+    """
+    Checks multiple potential partners against a single source protein in one call.
+    Returns a dictionary of {target_id: score}.
+    """
+    all_ids = [source_id] + suggested_ids
+    url = "https://string-db.org/api/json/network"
+    
+    params = {
+        "identifiers": "\r".join(all_ids),
+        "species": species
+    }
+    
+    found_interactions = {}
+    try:
+        res = requests.post(url, data=params).json()
+        for edge in res:
+            if edge['stringId_A'] == source_id:
+                found_interactions[edge['stringId_B']] = edge['score']
+            elif edge['stringId_B'] == source_id:
+                found_interactions[edge['stringId_A']] = edge['score']
+    except:
+        pass
+        
+    return found_interactions
+
+def get_ensp_from_symbol(symbol, species="9606"):
+    tax_to_name = {
+        "9606": "human",
+        "10090": "mouse",
+        "10116": "rat",
+        "7227": "drosophila",
+        "6239": "celegans",
+        "4932": "saccharomyces_cerevisiae"
+    }
+    
+    species_name = tax_to_name.get(str(species), "human")
+    url = f"https://rest.ensembl.org/lookup/symbol/{species_name}/{symbol}?content-type=application/json"
+    try:
+        res = requests.get(url).json()
+        return res.get('id') 
+    except:
+        return None
+    
+def parse_llm_output(raw_text):
+    """
+    Parses LLM text to extract protein symbols and their descriptions.
+    Expected format: "SYMBOL - description"
+    """
+    results = []
+    lines = raw_text.strip().split('\n')
+    pattern = r"(?m)^(?:[\d+\.\-\*\s]*)(?:\*\*)?([A-Za-z0-9_-]+)(?:\*\*)?\s*[-:]\s*(.*)$"
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        match = re.search(pattern, line)
+        if match:
+            symbol = match.group(1).strip()
+            description = match.group(2).strip()
+            
+            if 2 <= len(symbol) <= 20:
+                results.append({
+                    "symbol": symbol.upper(), 
+                    "description": description
+                })
+        else:
+            words = line.split()
+            if words and len(words[0]) > 2 and words[0].isupper():
+                results.append({
+                    "symbol": words[0].replace(':', '').strip(),
+                    "description": " ".join(words[1:]) if len(words) > 1 else "No description provided."
+                })
+                
+    return results
+
+@app.route('/api/predict', methods=['POST'])
+def predict_interactions():
+    data = request.json
+    protein_full_id = data.get('protein_id') # e.g., "9606.ENSP00000269305"
+    
+    # Extract just the name/symbol for the LLM
+    display_name = protein_full_id.split('.')[-1]
+    species_prefix = protein_full_id.split('.')[0] if '.' in protein_full_id else "9606"
+
+    response = requests.post('http://localhost:11434/api/chat', json={
+        "model": "llama3.1",
+        "messages": [
+            {"role": "system", "content": create_system_prompt()},
+            {"role": "user", "content": create_user_prompt(display_name)}
+        ],
+        "stream": False
+    })
+    
+    raw_text = response.json()['message']['content']
+    predictions = parse_llm_output(raw_text)
+
+    id_map = {}
+    for item in predictions:
+        ensp = get_ensp_from_symbol(item['symbol'])
+        if ensp:
+            full_id = f"{species_prefix}.{ensp}"
+            id_map[full_id] = item 
+    
+    target_ids = list(id_map.keys())
+    bulk_scores = check_string_bulk(display_name, target_ids)
+
+    new_nodes = []
+    new_links = []
+
+    for target_id, info in id_map.items():
+        string_score = bulk_scores.get(target_id)
+        if string_score:
+            final_score = string_score 
+            origin = "STRING"
+        else:
+            # placeholder (update later)
+            final_score = 0.0 
+            origin = "LLM"
+
+        new_nodes.append({
+            "id": target_id,
+            "label": info['symbol'],
+            "details": info['description'],
+            "origin": origin,
+        })
+
+        new_links.append({
+            "source": protein_full_id,
+            "target": target_id,
+            "score": final_score,
+            "origin": origin
+        })
+
+    return jsonify({
+        "nodes": new_nodes,
+        "links": new_links,
+        "raw_chat": raw_text
+    })
 
 @app.route('/')
 def hello():
