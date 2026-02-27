@@ -38,27 +38,24 @@ async function getPDBIdFromGene(fullEnspId) {
     }
 }
 
-function createProteinModal() {
-    if (!focusNode) return;
-    
-    updateHighlight();
-    const fullId = focusNode; 
-    const cleanId = fullId.includes('.') ? fullId.split('.')[1] : fullId;
+function createProteinModal(nodeId) {    
+    const cleanId = nodeId.includes('.') ? nodeId.split('.')[1] : nodeId;
 
-    getPDBIdFromGene(fullId).then(structures => {
+    getPDBIdFromGene(nodeId).then(structures => {
         if (!structures || !structures.length) {
             alert(`No 3D structures found for ${cleanId}`);
+            focusNode = null;
             return;
         }
         
-        // Remove existing modal if it exists
-        closeProteinModal(fullId);
+        // Remove existing modal if it already exists
+        closeProteinModal(nodeId);
 
         let currIdx = 0;
 
         const modal = document.createElement("div");
         modal.className = "draggable resizable protein-modal";
-        modal.id = `protein-modal-${fullId.replace(/\./g, '_')}`;
+        modal.id = `protein-modal-${nodeId.replace(/\./g, '_')}`;
         modal.style.cssText = `
             position: fixed; top: 120px; left: 80px; width: 350px; height: 400px;
             background: #1a1a1a; border: 1px solid #444; z-index: 1000;
@@ -73,7 +70,7 @@ function createProteinModal() {
         `;
 
         const title = document.createElement("span");
-        title.style.cssText = `font-size: 13px; font-weight: bold; margin-bottom: 6px; color: #00a2ff;`;
+        title.style.cssText = `font-size: 13px; font-weight: bold; margin-bottom: 6px; color: ${FOCUS_COLOR};`;
         header.appendChild(title);
 
         const nav = document.createElement("div");
@@ -106,7 +103,7 @@ function createProteinModal() {
             const queryParam = struct.isAlphaFold ? `afdb=${struct.pdbId}` : `pdb=${struct.pdbId}`;
             
             frame.src = `https://molstar.org/viewer/?${queryParam}&hide-controls=1&collapse-left-panel=1`;
-            title.textContent = struct.isAlphaFold ? `${fullId} [${struct.pdbId}] (AlphaFold)` : `${fullId} [${struct.pdbId}]`;
+            title.textContent = struct.isAlphaFold ? `${nodeId} [${struct.pdbId}] (AlphaFold)` : `${nodeId} [${struct.pdbId}]`;
             nav.querySelector("#pdb-counter").textContent = `${index + 1} / ${structures.length}`;
         }
 
@@ -129,20 +126,30 @@ function createProteinModal() {
                 }
             }
         });
-
-        closeBtn.onclick = () => modal.remove();
+        closeBtn.onclick = () => {
+          closeProteinModal(nodeId, modal);
+        }
     });
 }
 
-function closeProteinModal(fullId) {
-    const safeId = fullId.replace(/\./g, '_');
-    const modal = document.getElementById(`protein-modal-${safeId}`);
+function closeProteinModal(fullId, modal) {
     if (modal) {
         modal.remove();
+        focusNodes.delete(fullId);
         focusNode = null;
         updateHighlight(); 
     }
 }
+
+document.getElementById('menu-show-3d').onclick = function() {
+    if (focusNode) {
+        focusNodes.add(focusNode);
+        createProteinModal(focusNode);
+        updateHighlight();
+        document.getElementById('context-menu').style.display = 'none';
+        focusNode = null; // reset focus node
+    }
+};
 
   function showContextMenu(x, y) {
     const menu = document.getElementById('context-menu');
@@ -310,8 +317,10 @@ async function requestLLMPrediction(nodeId) {
     });
 
     const data = await res.json();
-    const chatElem = document.createElement('p');
-    chatElem.innerHTML = `<b>Model:</b> <span>${data.raw_chat.replace(/\n/g, '<br>')}</span>`;
+    const chatElem = document.createElement('div');
+    chatElem.className = "model-response";
+    const formattedChat = marked.parse(data.raw_chat);
+    chatElem.innerHTML = `<b>Model:</b> <div>${formattedChat}</div>`;
     history.appendChild(chatElem);
     history.scrollTop = history.scrollHeight;
 

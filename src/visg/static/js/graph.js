@@ -2,12 +2,12 @@ let Graph;
 const highlightNodes = new Set(); 
 const highlightLinks = new Set();
 let hoverNode = null; // single selected node
-let focusNode = null;
+let focusNodes = new Set(); // nodes with structures open
+let focusNode = null; // right clicked node
 
 let nodeMap = new Map();
 
 var activeLink = null;
-var activeLinks = new Set(['red', 'orange', 'blue', 'green', 'gray']); // for custom edge coloring
 var activeSpecies = {}; // GUI toggle states
 const activeGroups = {
     Given: true,
@@ -75,7 +75,7 @@ function initGraph() {
             return label;
           })
           .nodeColor(node => {
-            if(node.id == focusNode) {
+            if(focusNodes.has(node.id)) {
               return FOCUS_COLOR;
             } 
             if(highlightNodes.has(node.id)) {
@@ -141,7 +141,7 @@ function initGraph() {
               // Set the single hovered node
               hoverNode = node.id;
               showNodeLabel(node);
-              highlightTableRow(node.id);
+              highlightNodeTableRow(node.id);
               updatePredictionUI(node.id);
               if (settings.PruningMode == 'Neighborhood') {
                 calculateNodeDepths(node.id);
@@ -639,40 +639,10 @@ function clearPruning() {
     Graph.refresh();
 }
 
-function filterLinkByColor(link) {
-    const linkColor = link.color || 'gray';
-    // If multi-selection is active
-    if (activeLinks.size > 0) {
-      return activeLinks.has(linkColor);
-    }
-    // If a single hovered item is active
-    if (activeLink) {
-      return linkColor === activeLink;
-    }
-    // No filtering – show all
-    return true;
-}
-
-document.querySelectorAll('.legend-item').forEach(item => {
-    const color = item.getAttribute('data-color');
-
-    item.addEventListener('click', () => {
-      if (activeLinks.has(color)) {
-        activeLinks.delete(color);
-        item.classList.remove('selected');
-      } else {
-        activeLinks.add(color);
-        item.classList.add('selected');
-      }
-      activeLink = null;
-
-      Graph.linkVisibility(filterLinkByColor);
-    });
-});
-
 // trigger update of highlighted objects in scene
 function updateHighlight() {
-    Graph.nodeColor(Graph.nodeColor());
+    // Graph.nodeColor(Graph.nodeColor());
+    Graph.nodeThreeObject(Graph.nodeThreeObject());
     Graph
         .linkColor(Graph.linkColor())
         .linkWidth(Graph.linkWidth());
@@ -758,12 +728,12 @@ function applyNeighborhoodPruning() {
         visibleNodeIds.add(l.target.id || l.target);
     });
 
-    // 3. Update the Graph View
+    // Update the Graph View
     const visibleLinksSet = new Set(visibleLinks);
     Graph.linkVisibility(link => visibleLinksSet.has(link));
     Graph.nodeVisibility(node => visibleNodeIds.has(node.id));
 
-    // 4. Update UI
+    // Update UI
     setStats(visibleNodeIds.size, visibleLinks.length);
     Graph.refresh();
 }
@@ -808,7 +778,7 @@ function resetGraph(){
     highlightNodes.clear();
     highlightLinks.clear();
     hoverNode = null;
-    focusNode = null;
+    focusNodes.clear();
 }
 
 function initializeGraphPointers() {
@@ -955,9 +925,9 @@ function addGraphData(dataPart, reset = false) {
       const group = new THREE.Group();
       const radius = 4;
 
-      const isFocused = (focusNode && node.id === focusNode); // NEW
       const isHighlighted = highlightNodes.has(node.id);
       const isHovered = node.id === hoverNode; 
+      const isFocused = focusNodes.has(node.id);
 
       if (isHovered && node.showLabel) {
           const sprite = new SpriteText(node.id);
@@ -969,9 +939,9 @@ function addGraphData(dataPart, reset = false) {
       let baseColor = "white";
       
       if (isFocused) {
-          baseColor = LOW_CONF_COLOR; 
+          baseColor = FOCUS_COLOR; 
       } else if (isHighlighted && !isHovered) {
-          baseColor = (node.originType === "LLM") ? "#ffa500" : "#FFA000";
+          baseColor = (node.originType === "LLM") ? LOW_CONF_COLOR: "#FFA000";
       }
 
       const mainSphere = new THREE.Mesh(

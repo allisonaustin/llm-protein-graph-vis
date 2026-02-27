@@ -98,14 +98,6 @@ div.dg .cr.has-slider input[type="text"] {
   cursor: move;
 }
 
-.legend-item {
-    display: flex;
-    align-items: center;
-    margin-bottom: 5px;
-    border-radius: 2px;
-    transition: background-color 0.2s;
-}
-
 .node-label {
   position: fixed;
   background: rgba(0,0,0,0.7);
@@ -115,14 +107,6 @@ div.dg .cr.has-slider input[type="text"] {
   pointer-events: none;
   z-index: 1000;
   font-size: 12px;
-}
-
-.legend-item:hover {
-    background-color: #3e3d3d; 
-}
-
-.legend-item.selected {
-    background-color: #3e3d3d; 
 }
 
 .dg .cr.number {
@@ -176,4 +160,8 @@ div.dg .cr.has-slider input[type="text"] {
   pointer-events: none;
   z-index: 1000;
   display: none;
+}
+
+.hover-bg-secondary:hover {
+  background-color: #444 !important;
 }

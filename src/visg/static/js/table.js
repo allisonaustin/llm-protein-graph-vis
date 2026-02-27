@@ -55,11 +55,9 @@ function populateNodeTable(newNodes) {
     // checking new cluster assignment of existing nodes
     dataTable.rows().every(function(rowIdx, tableLoop, rowLoop) {
         const rowData = this.data();
-        const nodeId = rowData[1]; 
+        const nodeId = rowData[NODE_TABLE_COLS.length-2]; 
         const node = newNodes.concat(Graph.graphData().nodes).find(n => n.id === nodeId);
-        if (node) {
-            const clusterCell = `<div style="display:flex; justify-content:flex-end;"><span style="width:10px;height:10px;background-color:${node.clusterColor};border-radius:50%;opacity:0.5;"></span></div>`;            
-            rowData[0] = clusterCell; 
+        if (node) { 
             this.data(rowData);
         }
     });
@@ -72,9 +70,9 @@ function populateNodeTable(newNodes) {
             const totalLinks = inD + outD;
             const nodeId = node.id.split('.')[1]? node.id.split('.')[1] : node.id; // 10090.ENSMUSP00000000312 -> ENSMUSP00000000312
             const nodeUrl = `<a href="${getProteinUrl(node.id)}" target="_blank" style="text-decoration: none;">${nodeId} <i class="bi bi-box-arrow-up-right" style="font-size:0.7em;"></i></a>`;
-            const clusterCell = `<div style="display:flex; justify-content:flex-end;"><span style="width:10px;height:10px;background-color:${node.clusterColor};border-radius:50%;opacity:0.5;"></span></div>`;           
+            // const clusterCell = `<div style="display:flex; justify-content:flex-end;"><span style="width:10px;height:10px;background-color:${node.clusterColor};border-radius:50%;opacity:0.5;"></span></div>`;           
             dataTable.row.add([
-              clusterCell, 
+              // clusterCell, 
               nodeUrl, 
               totalLinks, 
               node.id, // hidden
@@ -85,9 +83,10 @@ function populateNodeTable(newNodes) {
     $('#data-table tbody').off('click', 'tr');
     $('#data-table tbody').on('click', 'tr', function () {
         const rowData = dataTable.row(this).data();
-        if (rowData && rowData[3]) {
-          searchAndFocusNode(rowData[3]);  
-          highlightTableRow(rowData[3]);
+        const row = dataTable.row(this).node();
+        if (rowData && rowData[NODE_TABLE_COLS.length-2]) {
+          searchAndFocusNode(rowData[NODE_TABLE_COLS.length-2]);  
+          $(row).addClass('highlight-node');
         }
     });
     dataTable.draw();
@@ -100,10 +99,12 @@ function populateLinkTable(links) {
 
     $('#data-table tbody').on('click', 'tr', function () {
       const rowData = dataTable.row(this).data();
+      const row = dataTable.row(this).node();
       if (rowData) {
         const sourceId = rowData[LINK_TABLE_COLS.length - 2];
         const targetId = rowData[LINK_TABLE_COLS.length - 1];
         searchAndFocusLink(sourceId, targetId);
+        $(row).addClass('highlight-node');
       }
     });
 
@@ -117,7 +118,7 @@ function populateLinkTable(links) {
         const color = colorScale ? colorScale(score) : 'white';
 
         const srcNode = Graph.graphData().nodes.find(n => n.id === source);
-        const clusterCell = srcNode ? `<div style="display:flex; justify-content:flex-end;"><span style="width:10px;height:10px;background-color:${srcNode.clusterColor || '#00a2ff'};border-radius:50%;opacity:0.5;"></span></div>` : '-';
+       // const clusterCell = srcNode ? `<div style="display:flex; justify-content:flex-end;"><span style="width:10px;height:10px;background-color:${srcNode.clusterColor || '#00a2ff'};border-radius:50%;opacity:0.5;"></span></div>` : '-';
 
         const details = `Source: ${scoreInfo[link.origin] || link.origin}`;
 
@@ -127,7 +128,7 @@ function populateLinkTable(links) {
         const sourceDataUrl = `<a href="${dataRef}" class="data-link" style="color: #00a2ff;" target="_blank" rel="noopener noreferrer">STRING</a> <i class="bi bi-box-arrow-up-right" style="font-size:0.8em;"></i>`;
         
         return [
-            clusterCell, 
+            // clusterCell, 
             sourceId,
             targetId,
             `<span style="color: ${color}; font-weight: bold;">${score.toFixed(3)}</span>`,
@@ -141,13 +142,14 @@ function populateLinkTable(links) {
     dataTable.rows.add(data).draw();
 }
 
-function highlightTableRow(nodeId) {
+// Highlights row in table when node is clicked in the graph
+function highlightNodeTableRow(nodeId) {
     const table = $('#data-table').DataTable();
     
     table.rows().nodes().to$().removeClass('highlight-node');
     table.rows().every(function() {
         const data = this.data();
-        if (data[3] === nodeId) {
+        if (data[NODE_TABLE_COLS.length-2] === nodeId) {
             const rowNode = this.node();
             $(rowNode).addClass('highlight-node');
             rowNode.scrollIntoView({ behavior: 'auto', block: 'nearest' });
@@ -167,9 +169,9 @@ function applyHighlights() {
         let shouldHighlight = false;
 
         if (isNodeTable) {
-            shouldHighlight = (rowData[3] === hoverNode);
+            shouldHighlight = (rowData[NODE_TABLE_COLS.length-2] === hoverNode);
         } else {
-            shouldHighlight = (rowData[7] === hoverNode || rowData[8] === hoverNode);
+            shouldHighlight = (rowData[LINK_TABLE_COLS.length-2] === hoverNode || rowData[LINK_TABLE_COLS.length-1] === hoverNode);
         }
 
         if (shouldHighlight) {
