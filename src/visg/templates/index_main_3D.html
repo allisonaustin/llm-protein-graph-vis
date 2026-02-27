@@ -173,8 +173,8 @@
     }, [])
   }
 
-  document.documentElement.style.setProperty('--low-confidence', LOW_CONFIDENCE_COLOR);
-  document.documentElement.style.setProperty('--high-confidence', HIGH_CONFIDENCE_COLOR);
+  document.documentElement.style.setProperty('--low-confidence', LOW_CONF_COLOR);
+  document.documentElement.style.setProperty('--high-confidence', HIGH_CONF_COLOR);
 
   document.querySelectorAll('.card-header.collapsible').forEach(header => {
     const targetId = header.getAttribute('data-bs-target');

@@ -4,6 +4,7 @@ var clusterColors = false; // cluster colors on/off
 
 //Define GUI and functions
 const Settings = function() {
+    this.ShowHighlights = true;
     this.ShowLinkDirections = false;
     this.ShowNodeNeighbors = false;
     this.ShowNodeInfo = false;
@@ -13,7 +14,7 @@ const Settings = function() {
     this.NodeDistance = collisonStrengthVal;
     this.Layout = currLayout;
     this.NumLayers = numLayers;
-    this.ShowClusterColors = clusterColors;
+    //this.ShowClusterColors = clusterColors;
     this.FocusDepth = 1;
     this.PruningMode = 'Neighborhood';
 };  
@@ -30,16 +31,19 @@ var folder3 = gui.addFolder('GUI Buttons');
 var folder4 = gui.addFolder('Filtering');
 
 folder3.add({ 'Zoom to Fit': zoomToFit }, 'Zoom to Fit');
-folder3.add({ 'Clear Highlights': clearHighlights }, 'Clear Highlights');
+folder3.add({ 'Clear Selection': clearSelection }, 'Clear Selection');
+folder3.add(settings, 'ShowHighlights')
+    .name('Show Highlights')
+    .onChange(toggleHighlights);
 folder3.add(settings, 'ShowLinkDirections')
     .name('Show Link Directions')
     .onChange(toggleLinkAnimation);
 folder3.add(settings, 'ShowNodeNeighbors')
     .name('Show Node Neighbors')
     .onChange(showNodeNeighbors);
-folder3.add(settings, 'ShowClusterColors')
-    .name('Show Cluster Colors')
-    .onChange(toggleClusterColors);
+// folder3.add(settings, 'ShowClusterColors')
+//     .name('Show Cluster Colors')
+//     .onChange(toggleClusterColors);
 folder3.open()
 
 const pruningController = folder4.add(settings, 'PruningMode', ['Global', 'Neighborhood'])

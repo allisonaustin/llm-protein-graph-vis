@@ -12,6 +12,8 @@ const scoreInfo = {
     tscore: 'Text mining'
 };
 
+const getProteinUrl = (symbol) => `https://www.uniprot.org/uniprotkb?query=${symbol}`;
+
 function rebuildTable(columns) {
     if ($.fn.DataTable.isDataTable('#data-table')) {
       $('#data-table').DataTable().destroy();
@@ -69,10 +71,11 @@ function populateNodeTable(newNodes) {
             const outD = Array.isArray(node.out_degree) ? node.out_degree.length : 0;
             const totalLinks = inD + outD;
             const nodeId = node.id.split('.')[1]? node.id.split('.')[1] : node.id; // 10090.ENSMUSP00000000312 -> ENSMUSP00000000312
+            const nodeUrl = `<a href="${getProteinUrl(node.id)}" target="_blank" style="text-decoration: none;">${nodeId} <i class="bi bi-box-arrow-up-right" style="font-size:0.7em;"></i></a>`;
             const clusterCell = `<div style="display:flex; justify-content:flex-end;"><span style="width:10px;height:10px;background-color:${node.clusterColor};border-radius:50%;opacity:0.5;"></span></div>`;           
             dataTable.row.add([
               clusterCell, 
-              nodeId, 
+              nodeUrl, 
               totalLinks, 
               node.id, // hidden
               `cluster ${node.clusterId}` // hidden
@@ -152,6 +155,7 @@ function highlightTableRow(nodeId) {
     });
 }
 
+// TODO: keep track of selected node/link in table to prevent searching on tab switch
 function applyHighlights() {
     if (!hoverNode) return;
 
@@ -171,9 +175,7 @@ function applyHighlights() {
         if (shouldHighlight) {
             const rowNode = this.node();
             $(rowNode).addClass('highlight-node');            
-            if (isNodeTable) {
-                rowNode.scrollIntoView({ behavior: 'auto', block: 'nearest' });
-            }
+            rowNode.scrollIntoView({ behavior: 'auto', block: 'nearest' });
         }
     });
 }

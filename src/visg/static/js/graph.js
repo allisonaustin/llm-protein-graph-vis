@@ -24,6 +24,7 @@ let enablePointerInteractions = true;
 let pauseAnimation = true;
 let showLinkWidth = false;
 let showLinkParticle = false;
+let showHighlights = true;
 let showNeighbors = false;
 let showNodeInfo = false;
 
@@ -74,24 +75,42 @@ function initGraph() {
             return label;
           })
           .nodeColor(node => {
-            if(highlightNodes.has(node.id)){
-              if(focusNode === node) {
-                return HIGHLIGHT_COLOR;
-              }else{
-                return '#FFA000';
+            if(node.id == focusNode) {
+              return FOCUS_COLOR;
+            } 
+            if(highlightNodes.has(node.id)) {
+              if (showHighlights) {
+                return node.originType == "LLM" ? LOW_CONF_COLOR : '#FFA000';
+              } else {
+                return "white";
               }
-            }else{
+            } else{
               return "white";
             }
           })
           .nodeResolution(20)
-          .linkColor(link => link.score ? colorScale(link.score) : 'gray')
+          .linkColor(link => {
+              if(highlightLinks.has(link)) {
+                if (showHighlights) {
+                  return link.originType == "LLM" ? LOW_CONF_COLOR : '#ffff00';
+                } else {
+                if (link.score) {
+                  return colorScale(link.score) 
+                } else return 'gray';
+              }
+              } else {
+                if (link.score) {
+                  return colorScale(link.score) 
+                } else return 'gray';
+              }
+          })
+          .linkWidth(link => {
+              return highlightLinks.has(link) ? 4 : 1;
+          })
           .linkOpacity(1)
           .linkDirectionalParticles(link => {
-            if(showLinkParticle)
-              return 8;
-            else
-              return [...highlightLinks].filter((x) => x.source.id===link.source.id && x.target.id===link.target.id).length !== 0 ? 8 : 0;
+              if (!showLinkParticle) return 0;              
+              return highlightLinks.has(link) ? 8 : 0;
           })
           .linkDirectionalParticleWidth(4)
           .linkWidth(link => (showLinkWidth && link.penwidth) ? link.penwidth : 0 )
@@ -136,12 +155,14 @@ function initGraph() {
             // console.log("Node selected:", node.id)
           })
           .onNodeRightClick((node, event) => {
-            if (event) event.preventDefault(); 
+            if (event) {
+              event.preventDefault(); 
+              event.stopPropagation();
+            }
             if (!node) return;
-            focusNode = node;
-            highlightNodes.add(node.id);
-            updateHighlight();
-            showCustomContextMenu(node, event.clientX, event.clientY);
+
+            focusNode = node.id;
+            showContextMenu(event.clientX, event.clientY);
           })
           .onLinkClick(link => {
 
@@ -179,19 +200,19 @@ function initGraph() {
     // force directed d3 simulation set up
     if (currLayout == 'Force-Directed') {
         Graph.d3Force('collide', d3.forceCollide(collisonStrengthVal))
-            .d3AlphaDecay(0.02)
-            .d3VelocityDecay(0.3)
-            .d3Force("charge", d3.forceManyBody().strength(-200))
+            .d3AlphaDecay(0.05)
+            .d3VelocityDecay(0.4)
+            .d3Force("charge", d3.forceManyBody().strength(-150))
             .d3Force('link',
                 d3.forceLink()
                 .id(d => d.id)
                 .distance(d => {
-                const similarity = d.similarity || 0.5;
-                return maxDist - similarity * (maxDist - minDist);
+                  const similarity = d.similarity || 0.5;
+                  return maxDist - similarity * (maxDist - minDist);
                 }
                 ).strength(s => {
-                const similarity = s.similarity || 0.5;
-                return 0.1 + similarity * 0.9;
+                  const similarity = s.similarity || 0.5;
+                  return 0.1 + similarity * 0.9;
                 })
         );
     } 
@@ -213,8 +234,8 @@ function clearNodeLabels() {
 function collisionUpdate(){
     console.log("collisionUpdate now...")
     Graph.d3Force('collide', d3.forceCollide(settings.collisionStrength))
-            .d3AlphaDecay(0.02)
-            .d3VelocityDecay(0.3);
+            .d3AlphaDecay(0.05)
+            .d3VelocityDecay(0.4);
     Graph.numDimensions(3);
 }
 
@@ -405,8 +426,8 @@ function searchAndFocusLink(sourceId, targetId, taxonId) {
 function applyForceDirectedLayout() {
     Graph.d3Force('collide', d3.forceCollide(collisonStrengthVal))
       .d3Force('center', d3.forceCenter(0, 0, 0))
-      .d3AlphaDecay(0.02)
-      .d3VelocityDecay(0.3)
+      .d3AlphaDecay(0.05)
+      .d3VelocityDecay(0.4)
       .d3Force("charge", d3.forceManyBody().strength(-200))
       .d3Force('link', 
         d3.forceLink()
@@ -577,30 +598,34 @@ const toggleClusterColors = () => {
 
 // Toggle Link Particles
 const toggleLinkAnimation = () => {
-    if(!showLinkParticle){
-      highlightNodes.clear();
-      highlightLinks.clear();
-      updateHighlight();
-    }
-    else{
-      Graph
-          .linkDirectionalParticles(Graph.linkDirectionalParticles());
-    }
     showLinkParticle = !showLinkParticle;
 
+    if(!showLinkParticle){
+      Graph.linkDirectionalParticles(0);
+    }
+    else{
+      Graph.linkDirectionalParticles(link => {
+        return highlightLinks.has(link) ? 8 : 0;
+      });
+    }
 }
 
-const clearHighlights = () => {
-    hoverNode = null;
-    highlightNodes.clear();
-    highlightLinks.clear();
-    updateHighlight();
-    clearNodeLabels();
-    updatePredictionUI(null);
-    if (settings.PruningMode == "Neighborhood") {
-      clearPruning();
-    }
-    $('#data-table tbody tr.highlight-node').removeClass('highlight-node');
+const toggleHighlights = () => {
+  showHighlights = !showHighlights;
+  updateHighlight();
+}
+
+const clearSelection = () => {
+  hoverNode = null;
+  highlightNodes.clear();
+  highlightLinks.clear();
+  updateHighlight();
+  clearNodeLabels();
+  updatePredictionUI(null);
+  if (settings.PruningMode == "Neighborhood") {
+    clearPruning();
+  }
+  $('#data-table tbody tr.highlight-node').removeClass('highlight-node');
 }
 
 function clearPruning() {
@@ -647,11 +672,16 @@ document.querySelectorAll('.legend-item').forEach(item => {
 
 // trigger update of highlighted objects in scene
 function updateHighlight() {
+    Graph.nodeColor(Graph.nodeColor());
     Graph
-        .nodeColor(Graph.nodeColor())
-        //.linkWidth(Graph.linkWidth())
-        .linkDirectionalParticles(Graph.linkDirectionalParticles())
-};
+        .linkColor(Graph.linkColor())
+        .linkWidth(Graph.linkWidth());
+    if (!showLinkParticle) {
+        Graph.linkDirectionalParticles(0);
+    } else {
+        Graph.linkDirectionalParticles(link => highlightLinks.has(link) ? 8 : 0);
+    }
+}
 
 // module for timed calls for graph updates
 function reloadGraphData(reset = false, stopAt = counterStopAt) {
@@ -710,7 +740,6 @@ function calculateNodeDepths(rootId) {
 }
 
 function applyNeighborhoodPruning() {
-  console.log(hoverNode);
     if (!hoverNode) return;
     const { links } = Graph.graphData();
     const maxD = settings.MaxDepth;
@@ -897,7 +926,7 @@ function addGraphData(dataPart, reset = false) {
     };
 
     const adjacency = {};
-    dataPart.links.forEach(link => {
+    result.links.forEach(link => {
       const sourceId = (link.source && typeof link.source === 'object') ? link.source.id : link.source;
       const targetId = (link.target && typeof link.target === 'object') ? link.target.id : link.target;
       
@@ -911,12 +940,6 @@ function addGraphData(dataPart, reset = false) {
 
     getConnectedComponents(result.nodes, adjacency);
     assignLinkCurvature(result.links);
-
-    const nlen = result.nodes ? new Set(result.nodes.map(n => n.id)).size : 0;
-    const llen = result.links ? getUniqueLinks(result.links).length : 0;
-
-    // settings.MaxLinks = llen;
-    // setStats(nlen, llen);
 
     const nodeClusterMap = {};
     result.nodes.forEach(node => {
@@ -932,51 +955,79 @@ function addGraphData(dataPart, reset = false) {
       const group = new THREE.Group();
       const radius = 4;
 
+      const isFocused = (focusNode && node.id === focusNode); // NEW
       const isHighlighted = highlightNodes.has(node.id);
       const isHovered = node.id === hoverNode; 
 
       if (isHovered && node.showLabel) {
-        const sprite = new SpriteText(node.id);
-        sprite.color = "white";     
-        sprite.textHeight = 8;
-        return sprite;              
+          const sprite = new SpriteText(node.id);
+          sprite.color = "white";     
+          sprite.textHeight = 12;
+          return sprite;              
       }
+
       let baseColor = "white";
-      if (isHighlighted && !isHovered) {
-        baseColor = "#FFA000";
+      
+      if (isFocused) {
+          baseColor = LOW_CONF_COLOR; 
+      } else if (isHighlighted && !isHovered) {
+          baseColor = (node.originType === "LLM") ? "#ffa500" : "#FFA000";
       }
 
       const mainSphere = new THREE.Mesh(
-        new THREE.SphereGeometry(radius, 16, 16),
-        new THREE.MeshStandardMaterial({
-          color: baseColor,
-          roughness: 0.8,
-          metalness: 0
-        })
+          new THREE.SphereGeometry(radius, 16, 16),
+          new THREE.MeshStandardMaterial({
+              color: baseColor,
+              roughness: 0.8,
+              metalness: 0
+          })
       );
-
       group.add(mainSphere);
 
       if (node.showLabel && !isHovered) {
-        const sprite = new SpriteText(node.id);
-        sprite.color = "white";     
-        sprite.textHeight = 8;
-        sprite.position.y = radius * 2;
-        group.add(sprite);
+          const sprite = new SpriteText(node.id);
+          sprite.color = "white";     
+          sprite.textHeight = 12;
+          sprite.position.y = radius * 2;
+          group.add(sprite);
       }
       return group;
-    });
+  });
 
-    rebuildTable(NODE_TABLE_COLS);
+    // rebuildTable(NODE_TABLE_COLS);
     if (currTable == 'Nodes') populateNodeTable(newNodes);
     else if (currTable == 'Links') populateLinkTable(dataPart.links);
 
-    updateGUILabels(dataPart.links);
+    if (hoverNode) {
+        dataPart.links.forEach(link => {
+            const s = typeof link.source === 'object' ? link.source.id : link.source;
+            const t = typeof link.target === 'object' ? link.target.id : link.target;
 
+            if (s === hoverNode || t === hoverNode) {
+                highlightLinks.add(link);                
+                const partnerId = (s === hoverNode) ? t : s;
+                highlightNodes.add(partnerId);
+            }
+        });
+    }
+
+    updateGUILabels(result.links);
     Graph.graphData(result);
 
+    const nlen = result.nodes ? new Set(result.nodes.map(n => n.id)).size : 0;
+    const llen = result.links ? getUniqueLinks(result.links).length : 0;
+
     initializeGraphPointers();
-    applyLinkFilters();
+    if(settings.PruningMode == 'Global') {
+      applyLinkFilters();
+    } else {
+      if (hoverNode) {
+        calculateNodeDepths(hoverNode);
+        applyNeighborhoodPruning();
+      } else {
+        setStats(nlen, llen)
+      }
+    }
     
     if (currLayout === 'Spherical') applySphericalLayout(result.nodes);
     

@@ -1,11 +1,11 @@
 // colors 
 const STRING_COLOR = "#40B0A6";
 const GO_COLOR = "#E1BE6A";
-const LOW_CONFIDENCE_COLOR = "#D41159";  
-const HIGH_CONFIDENCE_COLOR = "#1A85FF"; 
+const LOW_CONF_COLOR = "#D41159";  
+const HIGH_CONF_COLOR = "#1A85FF"; 
 const AVG_COLOR = "#44AA99";
-const HIGHLIGHT_COLOR = "#00a2ff";
-const COLOR_SCALE = [LOW_CONFIDENCE_COLOR, HIGH_CONFIDENCE_COLOR];
+const FOCUS_COLOR = "#00a2ff";
+const COLOR_SCALE = [LOW_CONF_COLOR, HIGH_CONF_COLOR];
 const clusterColorScale = d3.scaleOrdinal(d3.schemeCategory10);
 const color8 = "#F3A9"; // for redefining color shades
 const colorScale = d3.scaleLinear()

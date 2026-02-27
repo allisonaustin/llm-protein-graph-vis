@@ -7,6 +7,9 @@ from visg import data_path, master_file, data_part_width, master_filename, new_d
 # from visg.scripts.listener import Listener
 from visg.scripts.graph_processor import Protein_Graph
 
+from Bio import Align
+from Bio.Align import substitution_matrices
+
 import re
 import os
 from os import listdir
@@ -272,6 +275,19 @@ def get_ensp_from_symbol(symbol, species="9606"):
     except:
         return None
     
+def calculate_similarity(seq1, seq2):
+    if not seq1 or not seq2: return 0.5
+    
+    aligner = Align.PairwiseAligner()
+    aligner.substitution_matrix = substitution_matrices.load("BLOSUM62")
+    aligner.mode = 'global'
+    aligner.open_gap_score = -10
+    aligner.extend_gap_score = -0.5
+    
+    score = aligner.score(seq1, seq2)
+    max_score = aligner.score(seq1, seq1)
+    return max(0, min(1, score / max_score))
+    
 def parse_llm_output(raw_text):
     """
     Parses LLM text to extract protein symbols and their descriptions.
@@ -310,13 +326,14 @@ def parse_llm_output(raw_text):
 def predict_interactions():
     data = request.json
     protein_full_id = data.get('protein_id') # e.g., "9606.ENSP00000269305"
+    model_name = data.get('model', "llama3.1")
     
     # Extract just the name/symbol for the LLM
     display_name = protein_full_id.split('.')[-1]
     species_prefix = protein_full_id.split('.')[0] if '.' in protein_full_id else "9606"
 
     response = requests.post('http://localhost:11434/api/chat', json={
-        "model": "llama3.1",
+        "model": model_name,
         "messages": [
             {"role": "system", "content": create_system_prompt()},
             {"role": "user", "content": create_user_prompt(display_name)}
@@ -344,24 +361,24 @@ def predict_interactions():
         string_score = bulk_scores.get(target_id)
         if string_score:
             final_score = string_score 
-            origin = "STRING"
         else:
             # placeholder (update later)
             final_score = 0.0 
-            origin = "LLM"
 
         new_nodes.append({
             "id": target_id,
             "label": info['symbol'],
             "details": info['description'],
-            "origin": origin,
+            "origin": model_name,
+            "originType": "LLM",
         })
 
         new_links.append({
             "source": protein_full_id,
             "target": target_id,
             "score": final_score,
-            "origin": origin
+            "origin": model_name, 
+            "originType": "LLM"
         })
 
     return jsonify({

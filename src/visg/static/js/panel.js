@@ -41,7 +41,8 @@ async function getPDBIdFromGene(fullEnspId) {
 function createProteinModal() {
     if (!focusNode) return;
     
-    const fullId = focusNode.id; 
+    updateHighlight();
+    const fullId = focusNode; 
     const cleanId = fullId.includes('.') ? fullId.split('.')[1] : fullId;
 
     getPDBIdFromGene(fullId).then(structures => {
@@ -136,10 +137,14 @@ function createProteinModal() {
 function closeProteinModal(fullId) {
     const safeId = fullId.replace(/\./g, '_');
     const modal = document.getElementById(`protein-modal-${safeId}`);
-    if (modal) modal.remove();
+    if (modal) {
+        modal.remove();
+        focusNode = null;
+        updateHighlight(); 
+    }
 }
 
-  function showCustomContextMenu(node, x, y) {
+  function showContextMenu(x, y) {
     const menu = document.getElementById('context-menu');
     if (!menu) return;
     menu.style.left = `${x}px`;
@@ -312,9 +317,9 @@ async function requestLLMPrediction(nodeId) {
 
     console.log('New graph data:', data);
 
-    // if (data.nodes.length > 0) {
-    //     addGraphData({ nodes: data.nodes, links: data.links });
-    // }
+    if (data.nodes.length > 0) {
+        addGraphData({ nodes: data.nodes, links: data.links });
+    }
 }
 
 function updatePredictionUI(nodeId) {
