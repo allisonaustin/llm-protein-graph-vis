@@ -86,6 +86,7 @@ function populateNodeTable(newNodes) {
         const row = dataTable.row(this).node();
         if (rowData && rowData[NODE_TABLE_COLS.length-2]) {
           searchAndFocusNode(rowData[NODE_TABLE_COLS.length-2]);  
+          $('#data-table tbody tr.highlight-node').removeClass('highlight-node');
           $(row).addClass('highlight-node');
         }
     });
@@ -104,6 +105,7 @@ function populateLinkTable(links) {
         const sourceId = rowData[LINK_TABLE_COLS.length - 2];
         const targetId = rowData[LINK_TABLE_COLS.length - 1];
         searchAndFocusLink(sourceId, targetId);
+        $('#data-table tbody tr.highlight-node').removeClass('highlight-node');
         $(row).addClass('highlight-node');
       }
     });
@@ -157,9 +159,32 @@ function highlightNodeTableRow(nodeId) {
     });
 }
 
+function filterTableByNode(node) {
+    const table = $('#data-table').DataTable();
+    table.search('').columns().search();
+
+    if (!node) {
+        return;
+    }
+
+    const nodeId = node.id.replace(/\./g, '\\.'); 
+
+    if (currTable === 'Nodes') {
+        table.column(2).search(`^${nodeId}$`, true, false).draw();
+    } else {
+        $.fn.dataTable.ext.search.push(
+            function(settings, data, dataIndex) {
+                return data[6] === node.id || data[7] === node.id;
+            }
+        );
+        table.draw();
+        $.fn.dataTable.ext.search.pop();
+    }
+}
+
 // TODO: keep track of selected node/link in table to prevent searching on tab switch
 function applyHighlights() {
-    if (!hoverNode) return;
+    if (!hoverNode && !hoverLink) return;
 
     const table = $('#data-table').DataTable();
     const isNodeTable = (currTable === 'Nodes');

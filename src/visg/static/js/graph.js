@@ -2,6 +2,7 @@ let Graph;
 const highlightNodes = new Set(); 
 const highlightLinks = new Set();
 let hoverNode = null; // single selected node
+let hoverLink = null; // single selected link
 let focusNodes = new Set(); // nodes with structures open
 let focusNode = null; // right clicked node
 
@@ -80,7 +81,7 @@ function initGraph() {
             } 
             if(highlightNodes.has(node.id)) {
               if (showHighlights) {
-                return node.originType == "LLM" ? LOW_CONF_COLOR : '#FFA000';
+                return node.originType == "LLM" ? "#D41159" : '#FFA000';
               } else {
                 return "white";
               }
@@ -90,19 +91,15 @@ function initGraph() {
           })
           .nodeResolution(20)
           .linkColor(link => {
-              if(highlightLinks.has(link)) {
-                if (showHighlights) {
-                  return link.originType == "LLM" ? LOW_CONF_COLOR : '#ffff00';
-                } else {
-                if (link.score) {
-                  return colorScale(link.score) 
-                } else return 'gray';
-              }
+            if(highlightLinks.has(link)) {
+              if (showHighlights) {
+                return link.originType == "LLM" ? "#D41159" : '#ffff00';
               } else {
-                if (link.score) {
-                  return colorScale(link.score) 
-                } else return 'gray';
+                colorScale(link.score);
               }
+            } else {
+              return colorScale(link.score);
+            }
           })
           .linkWidth(link => {
               return highlightLinks.has(link) ? 4 : 1;
@@ -125,8 +122,9 @@ function initGraph() {
 
             highlightNodes.clear();
             highlightLinks.clear();
+            hoverLink = null;
 
-             if (node && hoverNode != node.id) {
+            if (node && hoverNode != node.id) {
               // Highlight this node and its neighbors
               highlightNodes.add(node.id);
               node.neighbors.forEach(neighbor => highlightNodes.add(neighbor));
@@ -137,20 +135,26 @@ function initGraph() {
                 (l.target.id || l.target) === node.id
               );
               matchingLinks.forEach(link => highlightLinks.add(link));
-
+              
               // Set the single hovered node
               hoverNode = node.id;
               showNodeLabel(node);
-              highlightNodeTableRow(node.id);
+              if (currTable === 'Nodes') {
+                highlightNodeTableRow(node?.id);
+              } else {
+                filterTableByNode(node);
+              }
               updatePredictionUI(node.id);
               if (settings.PruningMode == 'Neighborhood') {
-                calculateNodeDepths(node.id);
+                calculateNodeDepths();
                 applyNeighborhoodPruning();
               }
             } else {
               clearNodeLabels();
               hoverNode = null;
             }
+            filterTableByNode(node);
+            console.log(highlightLinks);
             updateHighlight();
             // console.log("Node selected:", node.id)
           })
@@ -176,9 +180,11 @@ function initGraph() {
 
             highlightNodes.clear();
             highlightLinks.clear();
+            hoverNode = null;
             clearNodeLabels();
 
             if (link && !highlightNodes.has(link.source.id) && !highlightNodes.has(link.target.id)) {
+              hoverLink = link;
               highlightLinks.add(link);
               highlightNodes.add(link.source.id);
               highlightNodes.add(link.target.id);
@@ -188,8 +194,14 @@ function initGraph() {
 
               srcNode.showLabel = true;
               tgtNode.showLabel = true;
+
+              updatePredictionUI(link.source.id);
+              if (settings.PruningMode == 'Neighborhood') {
+                calculateNodeDepths();
+                applyNeighborhoodPruning();
+              }
             }
-            Graph.refresh();
+            // Graph.refresh();
             updateHighlight();
           });
 
@@ -320,6 +332,7 @@ function searchAndFocusCluster(clusterColor) {
     highlightLinks.clear();
     clearNodeLabels();
     hoverNode = null;
+    hoverLink = null;
 
     nodesInCluster.forEach(node => {
       highlightNodes.add(node.id);
@@ -343,7 +356,7 @@ function searchAndFocusNode(query) {
     const node = Graph.graphData().nodes.find(n => n.id.toLowerCase() === query.toLowerCase());
     
     if (node) {
-      const distance = 400; // how far the camera should be from the node
+      const distance = 500; // how far the camera should be from the node
       const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
 
       Graph.cameraPosition(
@@ -358,6 +371,7 @@ function searchAndFocusNode(query) {
 
       highlightNodes.clear();
       highlightLinks.clear();
+      hoverLink = null;
       clearNodeLabels();
 
       if (hoverNode != node) {
@@ -374,7 +388,7 @@ function searchAndFocusNode(query) {
         showNodeLabel(node);
         updatePredictionUI(node.id);
         if (settings.PruningMode == 'Neighborhood') {
-          calculateNodeDepths(node.id);
+          calculateNodeDepths();
           applyNeighborhoodPruning();
         }
       }
@@ -388,13 +402,14 @@ function searchAndFocusNode(query) {
 function searchAndFocusLink(sourceId, targetId, taxonId) {
     const link = Graph.graphData().links.find(l =>
       (l.source.id || l.source) === sourceId &&
-      (l.target.id || l.target) === targetId);
+      (l.target.id || l.target) === targetId
+    );
 
     if (link) {
       const node = typeof link.source === 'object' ? link.source : Graph.graphData().nodes.find(n => n.id === link.source);
       const tgtNode = typeof link.target === 'object' ? link.target : Graph.graphData().nodes.find(n => n.id === link.target);
 
-      const distance = 400;
+      const distance = 500;
       const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
 
       Graph.cameraPosition(
@@ -410,10 +425,18 @@ function searchAndFocusLink(sourceId, targetId, taxonId) {
       clearNodeLabels();
       highlightNodes.clear();
       highlightLinks.clear();
+      hoverNode = null;
 
       highlightNodes.add(sourceId);
       highlightNodes.add(targetId);
       highlightLinks.add(link);
+      hoverLink = link;
+
+      updatePredictionUI(sourceId);
+      if (settings.PruningMode == 'Neighborhood') {
+        calculateNodeDepths();
+        applyNeighborhoodPruning();
+      }
 
       updateHighlight();
 
@@ -563,22 +586,36 @@ function applySphericalLayout(nodes, numLayers = 4) {
     Graph.refresh && Graph.refresh();
 }
 
+function passesPruning(link, index) {
+    if (highlightLinks.has(link)) return true;
 
-function filterLinkByOrganism(link) {
-    const species = link.ncbiTaxonId;
-    return activeSpecies[species];
+    if (settings.PruningMode === 'Global') {
+        const maxAllowed = Math.floor(settings.MaxLinks);
+        return index <= maxAllowed; 
+    } 
+    
+    if (settings.PruningMode === 'Neighborhood') {
+        if (!hoverNode && !hoverLink) return true; 
+
+        const maxD = settings.MaxDepth;
+        const s = link.source;
+        const t = link.target;
+
+        return (s.depth !== undefined && s.depth <= maxD) && 
+               (t.depth !== undefined && t.depth <= maxD);
+    }
+
+    return true;
 }
 
-  
-function filterLinkByGroup(link) {
-    if (link.originType !== "File" && activeGroups.Generated) return true;
-    if (link.originType == "File" && activeGroups.Given) return true;
-    return false;
-}
+function filterLinkByGroup(link, index) {
+    if (!passesPruning(link, index)) return false;
 
-
-const updateLinks = () => {
-    Graph.linkVisibility(filterLinkByOrganism);
+    if (link.originType === "File") {
+        return activeGroups.Given;
+    } else {
+        return activeGroups.Generated;
+    }
 }
 
 const updateLinkGroups = () => {
@@ -617,6 +654,7 @@ const toggleHighlights = () => {
 
 const clearSelection = () => {
   hoverNode = null;
+  hoverLink = null;
   highlightNodes.clear();
   highlightLinks.clear();
   updateHighlight();
@@ -680,37 +718,49 @@ function reloadGraphData(reset = false, stopAt = counterStopAt) {
     }, timerV);
 }
 
-function runBFS(rootId) {
-    const { nodes } = Graph.graphData();
-    
-    nodes.forEach(n => n.depth = Infinity);
+function runBFS(rootIds) {
+  const startNodes = Array.isArray(rootIds) ? rootIds : [rootIds]; 
 
-    const rootNode = globalNodeMap.get(rootId);
-    if (!rootNode) return;
+  const { nodes } = Graph.graphData();
+  nodes.forEach(n => n.depth = Infinity);
 
-    rootNode.depth = 0;
-    const queue = [rootNode];
+  const queue = [];
 
-    while (queue.length > 0) {
-        const curr = queue.shift();
-        
-        curr.neighbors.forEach(neighborId => {
-            const neighborNode = globalNodeMap.get(neighborId);
-            if (neighborNode && neighborNode.depth === Infinity) {
-                neighborNode.depth = curr.depth + 1;
-                queue.push(neighborNode);
-            }
-        });
+  startNodes.forEach(id => {
+    const node = globalNodeMap.get(id);
+    if (node) {
+        node.depth = 0;
+        queue.push(node);
     }
+  });
+
+  while (queue.length > 0) {
+    const curr = queue.shift();
+    
+    curr.neighbors.forEach(neighborId => {
+        const neighborNode = globalNodeMap.get(neighborId);
+        if (neighborNode && neighborNode.depth === Infinity) {
+            neighborNode.depth = curr.depth + 1;
+            queue.push(neighborNode);
+        }
+    });
+  }
 }
 
 // getting depths of each node from a single node (rootId)
-function calculateNodeDepths(rootId) {
-    runBFS(rootId); 
+function calculateNodeDepths() {
+  if (hoverLink) {
+    const sId = hoverLink.source.id || hoverLink.source;
+    const tId = hoverLink.target.id || hoverLink.target;
+    runBFS([sId, tId]);
+  } else if (hoverNode) {
+    runBFS(hoverNode)
+  }
 }
 
-function applyNeighborhoodPruning() {
-    if (!hoverNode) return;
+function applyNeighborhoodPruning(linkType = false) {
+    if (!hoverNode && !hoverLink) return;
+
     const { links } = Graph.graphData();
     const maxD = settings.MaxDepth;
 
@@ -738,7 +788,7 @@ function applyNeighborhoodPruning() {
     Graph.refresh();
 }
 
-function applyLinkFilters() {
+function applyLinkFilters(linkType = false) {
   const { links, nodes } = Graph.graphData();
   const maxAllowed = Math.min(Math.floor(settings.MaxLinks), links.length);
 
@@ -778,13 +828,13 @@ function resetGraph(){
     highlightNodes.clear();
     highlightLinks.clear();
     hoverNode = null;
+    hoverLink = null;
     focusNodes.clear();
 }
 
 function initializeGraphPointers() {
     const { nodes } = Graph.graphData();
     globalNodeMap = new Map(nodes.map(n => [n.id, n]));
-    
     const degrees = nodes.map(n => n.neighbors.length).sort((a, b) => b - a);
     globalHubThreshold = degrees[10] || 20;
 }
@@ -798,21 +848,27 @@ function addGraphData(dataPart, reset = false) {
 
     document.body.classList.add('has-data');
 
-    dataPart.nodes = dataPart.nodes.map(n => ({
+    dataPart.nodes = dataPart.nodes.map(n => {
+      const nodeObj = {
         ...n,
         in_degree: n.in_degree || [],
         out_degree: n.out_degree || [],
         neighbors: n.neighbors || [],
         links: n.links || [],
-        showLable: false
-    }));
+        showLabel: false,
+        depth: 1
+      };
+      return nodeObj;
+    });
+
+    const existingNodes = Graph.graphData().nodes? Graph.graphData().nodes : {};
 
     dataPart.links.forEach(link => {
         const s = typeof link.source === 'object' ? link.source.id : link.source;
         const t = typeof link.target === 'object' ? link.target.id : link.target;
         
-        const sNode = dataPart.nodes.find(n => n.id === s);
-        const tNode = dataPart.nodes.find(n => n.id === t);
+        const sNode = dataPart.nodes.find(n => n.id === s) || existingNodes.find(n => n.id === s);
+        const tNode = dataPart.nodes.find(n => n.id === t) || existingNodes.find(n => n.id === t);
         
         if (sNode && !sNode.neighbors.includes(t)) sNode.neighbors.push(t);
         if (tNode && !tNode.neighbors.includes(s)) tNode.neighbors.push(s);
@@ -822,93 +878,46 @@ function addGraphData(dataPart, reset = false) {
         link.importance = (sNode?.neighbors?.length || 0) + (tNode?.neighbors?.length || 0);
     });
 
-    const linkedNodeIds = new Set();
-    dataPart.links.forEach(link => {
-        const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-        linkedNodeIds.add(sourceId);
-        linkedNodeIds.add(targetId);
-    });
-
-    dataPart.nodes = dataPart.nodes.filter(n => linkedNodeIds.has(n.id));
     dataPart.links.sort((a,b) => (b.importance || 0) - (a.importance || 0));
 
-    const { nodes, links } = Graph.graphData();
+    const { nodes: currentNodes, links: currentLinks } = Graph.graphData();
 
-    let newNodes = [];
-    let oldNodes = [];
-    let nodesFound = [];
+    const existingNodeIds = new Set(currentNodes.map(n => n.id));
+    const newNodes = dataPart.nodes.filter(n => !existingNodeIds.has(n.id));
 
-    if (nodes.length !== 0) {
-        nodes.forEach(n => {
-            const oldNVals = dataPart.nodes.find(newN => newN.id === n.id);
-
-            if (!oldNVals) {
-                oldNodes.push(n);
-            } else {
-                nodesFound.push(n.id);
-                const oldLinkVals = dataPart.links.filter(newL => (newL.source === n.id) || (newL.target === n.id));
-
-                oldLinkVals.forEach(inoutl => {
-                    const src = typeof inoutl.source === 'object' ? inoutl.source.id : inoutl.source;
-                    const tgt = typeof inoutl.target === 'object' ? inoutl.target.id : inoutl.target;
-                    
-                    if (n.id === src) n.out_degree.push(tgt);
-                    else if (n.id === tgt) n.in_degree.push(src);
-                });
-
-                n.out_degree = [...new Set(n.out_degree)];
-                n.in_degree = [...new Set(n.in_degree)];
-                n.links = [...(n.links || []), ...oldLinkVals];
-                n.neighbors = [...new Set([...(n.neighbors || []), ...(oldNVals.neighbors || [])])];
-                n.showLable = false;
-                oldNodes.push(n);
-            }
+    const updatedOldNodes = currentNodes.map(oldNode => {
+      const match = dataPart.nodes.find(inN => inN.id === oldNode.id);
+      if (match) {
+        oldNode.neighbors = [...new Set([...(oldNode.neighbors || []), ...(match.neighbors ||[])])]
+        const newLinks = dataPart.links.filter(l => {
+          const s = typeof l.source === "object" ? l.source.id : l.source;
+          const t = typeof l.target === "object" ? l.target.id : l.target;
+          return s === oldNode.id || t === oldNode.id;
         });
-        newNodes = dataPart.nodes.filter(newN => !(nodesFound.includes(newN.id)));
-    } else {
-        newNodes = dataPart.nodes.map(n => {
-            const nodeLinks = dataPart.links.filter(l => {
-                const src = typeof l.source === 'object' ? l.source.id : l.source;
-                const tgt = typeof l.target === 'object' ? l.target.id : l.target;
-                return src === n.id || tgt === n.id;
-            });
-
-            nodeLinks.forEach(l => {
-                const src = typeof l.source === 'object' ? l.source.id : l.source;
-                const tgt = typeof l.target === 'object' ? l.target.id : l.target;
-                
-                if (n.id === src) n.out_degree.push(tgt);
-                else if (n.id === tgt) n.in_degree.push(src);
-            });
-
-            n.out_degree = [...new Set(n.out_degree)];
-            n.in_degree = [...new Set(n.in_degree)];
-            n.neighbors = [...new Set([...n.out_degree, ...n.in_degree])];
-            
-            return n;
-        });
-    }
-
-    const result = {
-        nodes: [...oldNodes, ...newNodes],
-        links: links.concat(dataPart.links)
-    };
-
-    const adjacency = {};
-    result.links.forEach(link => {
-      const sourceId = (link.source && typeof link.source === 'object') ? link.source.id : link.source;
-      const targetId = (link.target && typeof link.target === 'object') ? link.target.id : link.target;
-      
-      if (sourceId && targetId) {
-          if (!adjacency[sourceId]) adjacency[sourceId] = new Set();
-          if (!adjacency[targetId]) adjacency[targetId] = new Set();
-          adjacency[sourceId].add(targetId);
-          adjacency[targetId].add(sourceId);
+        oldNode.links = [...(oldNode.links || []), ...newLinks];
       }
+      return oldNode;
     });
 
-    getConnectedComponents(result.nodes, adjacency);
+    newNodes.forEach(n => {
+      const nodeLinks = dataPart.links.filter(l => {
+        const src = typeof l.source === "object" ? l.source.id : l.source;
+        const tgt = typeof l.target === "object" ? l.target.id : l.target;
+        return src === n.id || tgt === n.id;
+      });
+      nodeLinks.forEach(l => {
+        const src = typeof l.source === "object" ? l.source.id : l.source;
+        const tgt = typeof l.target === "object" ? l.target.id : l.target;
+        if (n.id === src) n.out_degree.push(tgt);
+        else if (n.id === tgt) n.in_degree.push(src);
+      })
+    })
+
+    const result = {
+        nodes: [...updatedOldNodes, ...newNodes],
+        links: [...currentLinks, ...dataPart.links]
+    };
+
     assignLinkCurvature(result.links);
 
     const nodeClusterMap = {};
@@ -930,10 +939,11 @@ function addGraphData(dataPart, reset = false) {
       const isFocused = focusNodes.has(node.id);
 
       if (isHovered && node.showLabel) {
-          const sprite = new SpriteText(node.id);
-          sprite.color = "white";     
-          sprite.textHeight = 12;
-          return sprite;              
+        const spriteText = node.id.split(".")[1] ? node.id.split(".")[1] : node.id
+        const sprite = new SpriteText(spriteText);
+        sprite.color = "white";     
+        sprite.textHeight = 12;
+        return sprite;              
       }
 
       let baseColor = "white";
@@ -941,7 +951,7 @@ function addGraphData(dataPart, reset = false) {
       if (isFocused) {
           baseColor = FOCUS_COLOR; 
       } else if (isHighlighted && !isHovered) {
-          baseColor = (node.originType === "LLM") ? LOW_CONF_COLOR: "#FFA000";
+          baseColor = (node.originType === "LLM") ? "#D41159": "#FFA000";
       }
 
       const mainSphere = new THREE.Mesh(
@@ -955,11 +965,12 @@ function addGraphData(dataPart, reset = false) {
       group.add(mainSphere);
 
       if (node.showLabel && !isHovered) {
-          const sprite = new SpriteText(node.id);
-          sprite.color = "white";     
-          sprite.textHeight = 12;
-          sprite.position.y = radius * 2;
-          group.add(sprite);
+        const spriteText = node.id.split(".")[1]? node.id.split(".")[1] : node.id;
+        const sprite = new SpriteText(spriteText);
+        sprite.color = "white";     
+        sprite.textHeight = 12;
+        sprite.position.y = radius * 2;
+        group.add(sprite);
       }
       return group;
   });
@@ -968,21 +979,22 @@ function addGraphData(dataPart, reset = false) {
     if (currTable == 'Nodes') populateNodeTable(newNodes);
     else if (currTable == 'Links') populateLinkTable(dataPart.links);
 
-    if (hoverNode) {
-        dataPart.links.forEach(link => {
-            const s = typeof link.source === 'object' ? link.source.id : link.source;
-            const t = typeof link.target === 'object' ? link.target.id : link.target;
-
-            if (s === hoverNode || t === hoverNode) {
-                highlightLinks.add(link);                
-                const partnerId = (s === hoverNode) ? t : s;
-                highlightNodes.add(partnerId);
-            }
-        });
-    }
-
     updateGUILabels(result.links);
     Graph.graphData(result);
+
+    // updating highlighted sets
+    if (hoverNode) {
+      const updatedLinks = Graph.graphData().links.filter(l => {
+          const s = l.source.id;
+          const t = l.target.id;
+          return s === hoverNode || t === hoverNode;
+      });
+      updatedLinks.forEach(l => {
+        highlightLinks.add(l)
+        highlightNodes.add(l.source.id);
+        highlightNodes.add(l.target.id);
+      });
+    }
 
     const nlen = result.nodes ? new Set(result.nodes.map(n => n.id)).size : 0;
     const llen = result.links ? getUniqueLinks(result.links).length : 0;
@@ -991,17 +1003,21 @@ function addGraphData(dataPart, reset = false) {
     if(settings.PruningMode == 'Global') {
       applyLinkFilters();
     } else {
-      if (hoverNode) {
-        calculateNodeDepths(hoverNode);
+      if (hoverNode || hoverLink) {
+        calculateNodeDepths();
         applyNeighborhoodPruning();
       } else {
-        setStats(nlen, llen)
+        setStats(nlen, llen);
       }
     }
     
     if (currLayout === 'Spherical') applySphericalLayout(result.nodes);
     
-    updateHighlight();
+    if (hoverNode) {
+        setTimeout(() => {
+            searchAndFocusNode(hoverNode);
+        }, 100); 
+    } else updateHighlight();
     // refreshCharts();
 }
 

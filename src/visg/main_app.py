@@ -7,9 +7,6 @@ from visg import data_path, master_file, data_part_width, master_filename, new_d
 # from visg.scripts.listener import Listener
 from visg.scripts.graph_processor import Protein_Graph
 
-from Bio import Align
-from Bio.Align import substitution_matrices
-
 import re
 import os
 from os import listdir
@@ -258,35 +255,29 @@ def check_string_bulk(source_id, suggested_ids, species=9606):
     return found_interactions
 
 def get_ensp_from_symbol(symbol, species="9606"):
-    tax_to_name = {
-        "9606": "human",
-        "10090": "mouse",
-        "10116": "rat",
-        "7227": "drosophila",
-        "6239": "celegans",
-        "4932": "saccharomyces_cerevisiae"
+    """
+    Maps a gene symbol or common ID to a STRING protein ID (e.g., 10090.ENSMUSP...).
+    """
+    url = "https://string-db.org/api/json/get_string_ids"
+    
+    params = {
+        "identifiers": symbol,
+        "species": species,
+        "limit": 1, 
+        "echo_query": 1
     }
     
-    species_name = tax_to_name.get(str(species), "human")
-    url = f"https://rest.ensembl.org/lookup/symbol/{species_name}/{symbol}?content-type=application/json"
     try:
-        res = requests.get(url).json()
-        return res.get('id') 
-    except:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        if data and len(data) > 0:
+            return data[0].get('stringId')
         return None
-    
-def calculate_similarity(seq1, seq2):
-    if not seq1 or not seq2: return 0.5
-    
-    aligner = Align.PairwiseAligner()
-    aligner.substitution_matrix = substitution_matrices.load("BLOSUM62")
-    aligner.mode = 'global'
-    aligner.open_gap_score = -10
-    aligner.extend_gap_score = -0.5
-    
-    score = aligner.score(seq1, seq2)
-    max_score = aligner.score(seq1, seq1)
-    return max(0, min(1, score / max_score))
+    except Exception as e:
+        print(f"Error mapping {symbol}: {e}")
+        return None
     
 def parse_llm_output(raw_text):
     """
@@ -341,42 +332,48 @@ def predict_interactions():
         "stream": False
     })
     
-    raw_text = response.json()['message']['content']
+    raw_text = response.json().get('message', {}).get('content', '')
     predictions = parse_llm_output(raw_text)
+    id_map = {} 
 
-    id_map = {}
     for item in predictions:
-        ensp = get_ensp_from_symbol(item['symbol'])
-        if ensp:
-            full_id = f"{species_prefix}.{ensp}"
-            id_map[full_id] = item 
+        symbol = item['symbol']
+        ensp = get_ensp_from_symbol(symbol, species_prefix)
+        
+        target_id = ensp if ensp else symbol
+
+        if target_id != protein_full_id:
+            id_map[target_id] = {
+                "label": symbol,
+                "details": item.get('details') or item.get('description', '')
+            } 
+
+    if not predictions:
+        found_genes = re.findall(r'(?:•|\*|-)\s*([A-Z][A-Z0-9]{2,10})', raw_text)
+        for gene in set(found_genes): 
+            ensp = get_ensp_from_symbol(gene, species_prefix)
+            if ensp and ensp != protein_full_id:
+                id_map[ensp] = {'id': ensp, 'label': gene, 'details': ''}
     
     target_ids = list(id_map.keys())
-    bulk_scores = check_string_bulk(display_name, target_ids)
+    bulk_scores = check_string_bulk(protein_full_id, target_ids, species_prefix)
 
     new_nodes = []
     new_links = []
 
-    for target_id, info in id_map.items():
-        string_score = bulk_scores.get(target_id)
-        if string_score:
-            final_score = string_score 
-        else:
-            # placeholder (update later)
-            final_score = 0.0 
-
+    for tid, info in id_map.items():
         new_nodes.append({
-            "id": target_id,
-            "label": info['symbol'],
-            "details": info['description'],
+            "id": tid,
+            "label": info["label"],
+            "details": info["details"],
             "origin": model_name,
             "originType": "LLM",
         })
 
         new_links.append({
             "source": protein_full_id,
-            "target": target_id,
-            "score": final_score,
+            "target": tid,
+            "score": bulk_scores.get(tid, 0.0),
             "origin": model_name, 
             "originType": "LLM"
         })

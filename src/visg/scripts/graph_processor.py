@@ -1,4 +1,4 @@
-from visg import data_path, master_file, data_part_width, master_filename, SPECIES, UDF_RESULT
+from visg import data_path, master_file, data_part_width, master_filename
 
 import re
 import os
