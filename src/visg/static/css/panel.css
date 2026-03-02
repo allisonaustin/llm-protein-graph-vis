@@ -272,3 +272,13 @@
     font-size: 0.9em;
     min-height: 1.2em; 
 }
+
+.gene-link {
+    color: #ff5733;
+    text-decoration: underline;
+    cursor: pointer;
+    font-weight: bold;
+}
+.gene-link:hover {
+    color: #D41159; /* Your LLM color */
+}

@@ -3,7 +3,16 @@ from flask import render_template
 from flask import Flask, g
 from flask import request, jsonify, current_app
 import flask_sijax
-from visg import data_path, master_file, data_part_width, master_filename, new_data_master_filename, watchFlag, min_link_count, max_link_count
+from visg import data_path, \
+                master_file, \
+                data_part_width, \
+                master_filename, \
+                new_data_master_filename, \
+                watchFlag, \
+                min_link_count, \
+                max_link_count, \
+                GO_DATA_DIR, \
+                GO_DAG
 # from visg.scripts.listener import Listener
 from visg.scripts.graph_processor import Protein_Graph
 
@@ -22,6 +31,19 @@ import time
 import io
 import itertools
 import requests
+
+from functools import lru_cache 
+
+import csv 
+from io import StringIO 
+
+import pickle
+from goatools.associations import read_gaf
+from goatools.semantic import TermCounts, get_info_content, resnik_sim
+
+termcounts = None
+ic_map = {}
+max_ic = 1.0
 
 def check_file_updates(obj_response):
 
@@ -163,6 +185,79 @@ def create_user_prompt(protein_name):
     )
     return base_prompt.format(protein=protein_name)
 
+@app.route('/build_ic', methods=['POST'])
+def build_ic():
+    global ic_map, termcounts, max_ic
+
+    print("Building Information Content (IC) lookup table...")
+    try: 
+        data = request.json
+        gaf_file = data.get('gaf_file')
+        associations = read_gaf(os.path.join(GO_DATA_DIR, gaf_file), namespace='BP')
+        termcounts = TermCounts(GO_DAG, associations)
+        ic_map = {
+            go_id: get_info_content(go_id, termcounts)
+            for go_id in termcounts.go2genes.keys()
+        }
+        max_ic = max(ic_map.values()) if ic_map else 1.0
+        
+        return jsonify({
+            "status": "success",
+            "filename": gaf_file,
+            "max_ic": max_ic,
+            "term_count": len(ic_map)
+        })
+    except Exception as e:
+        print(f"Error building IC: {e}")
+        return jsonify({"error": str(e)}, 500)
+
+def extract_go_ids(go_input):
+    """
+    Regex to extract all GO IDs from a UniProt string.
+    Example: 'process [GO:0001]' -> {'GO:0001'}
+    """
+    if not go_input:
+        return set()
+    
+    if isinstance(go_input, set):
+        go_input = "; ".join(list(go_input))
+        
+    return set(re.findall(r'GO:\d+', go_input))
+
+@lru_cache(maxsize=512)
+def get_protein_info(protein_name, species):
+    """
+    Retrieve GO terms from UniProt from a given protein symbol (e.g. PTEN).
+    """
+    base_url = "https://rest.uniprot.org/uniprotkb/search"
+    params = {
+        "query": f"{protein_name} AND (organism_id:{species})",
+        "format": "tsv",
+        "fields": (
+            "accession,id,protein_name,gene_names,organism_name,"
+            "go_f,go_c,go_p,"   # GO terms
+        )
+    }
+    go_terms = {"MF": set(), "CC": set(), "BP": set()}
+    try:
+        r = requests.get(base_url, params=params, timeout=10)
+        r.raise_for_status()
+        data = r.text
+    except Exception as e:
+        print(f"[Retriever Error] {e}")
+        return go_terms
+
+    reader = csv.DictReader(StringIO(data), delimiter="\t")
+    for row in reader: 
+        # Extract GO terms
+        # if row.get("Gene Ontology (molecular function)"):
+        #     go_terms["MF"].update(row["Gene Ontology (molecular function)"].split("; "))
+        # if row.get("Gene Ontology (cellular component)"):
+        #     go_terms["CC"].update(row["Gene Ontology (cellular component)"].split("; "))
+        if row.get("Gene Ontology (biological process)"):
+            go_terms["BP"].update(row["Gene Ontology (biological process)"].split("; "))
+    return go_terms
+
 @app.route('/api/list-presets')
 def list_presets():
     directory = os.path.join(current_app.static_folder, 'data')
@@ -170,6 +265,15 @@ def list_presets():
         return jsonify([])
     
     files = [f for f in os.listdir(directory) if f.endswith(('.csv', '.tsv', '.txt'))]
+    return jsonify(files)
+
+@app.route('/api/list-gafs')
+def list_gafs():
+    directory = os.path.join(current_app.static_folder, 'data/go_data')
+    if not os.path.exists(directory):
+        return jsonify([])
+    
+    files = [f for f in os.listdir(directory) if f.endswith(('.gaf'))]
     return jsonify(files)
 
 @app.route('/upload_ppi', methods=['POST'])
@@ -213,6 +317,7 @@ def upload_ppi():
                     "source": p1, 
                     "target": p2, 
                     "score": score/1000.0, 
+                    "scoreSource": "File",
                     "origin": file.filename,
                     "originType": "File",
                 })
@@ -240,15 +345,31 @@ def check_string_bulk(source_id, suggested_ids, species=9606):
         "identifiers": "\r".join(all_ids),
         "species": species
     }
+
+    evidence_map = {
+        'escore': 'Experiments',
+        'dscore': 'Database',
+        'tscore': 'Textmining',
+        'ascore': 'Co-expression',
+        'pscore': 'Neighborhood',
+        'fscore': 'Fusion',
+        'gscore': 'Co-occurrence'
+    }
     
     found_interactions = {}
     try:
         res = requests.post(url, data=params).json()
         for edge in res:
-            if edge['stringId_A'] == source_id:
-                found_interactions[edge['stringId_B']] = edge['score']
-            elif edge['stringId_B'] == source_id:
-                found_interactions[edge['stringId_A']] = edge['score']
+            target_id = edge['stringId_B'] if edge['stringId_A'] == source_id else edge['stringId_A']
+            sub_scores = {k: v for k, v in edge.items() if k in evidence_map and v > 0}
+            if sub_scores:
+                best_key = max(sub_scores, key=sub_scores.get)
+                top_type = evidence_map[best_key]
+
+            found_interactions[target_id] = {
+                "score": edge["score"],
+                "type": top_type
+            }
     except:
         pass
         
@@ -310,8 +431,37 @@ def parse_llm_output(raw_text):
                     "symbol": words[0].replace(':', '').strip(),
                     "description": " ".join(words[1:]) if len(words) > 1 else "No description provided."
                 })
-                
     return results
+
+def clean_llm_response(text):
+    pattern = r"((?:^[*-]|\d+\.).*?)(?=\n\n|\Z)" 
+    matches = re.findall(pattern, text, re.MULTILINE | re.DOTALL)
+    if matches:
+        return "\n".join(matches).strip()
+    return text
+
+def compute_resnik(protein_a, protein_b, species):
+    global max_ic, termcounts, ic_map
+    terms_a = extract_go_ids(get_protein_info(protein_a, species)['BP'])
+    terms_b = extract_go_ids(get_protein_info(protein_b, species)['BP'])
+    
+    if not terms_a or not terms_b:
+        return 0.0, []
+
+    max_resnik = 0.0
+    best_pair = None
+
+    # Calculate Resnik for all pairs
+    for a in terms_a:
+        for b in terms_b:
+            if a in GO_DAG and b in GO_DAG:
+                score = resnik_sim(a, b, GO_DAG, termcounts)
+                if score > max_resnik:
+                    max_resnik = score
+                    best_pair = (a, b)
+
+    normalized = round(max_resnik / max_ic, 3) if max_ic > 0 else 0.0
+    return normalized, best_pair
 
 @app.route('/api/predict', methods=['POST'])
 def predict_interactions():
@@ -334,6 +484,7 @@ def predict_interactions():
     
     raw_text = response.json().get('message', {}).get('content', '')
     predictions = parse_llm_output(raw_text)
+    clean_text = clean_llm_response(raw_text)
     id_map = {} 
 
     for item in predictions:
@@ -345,7 +496,8 @@ def predict_interactions():
         if target_id != protein_full_id:
             id_map[target_id] = {
                 "label": symbol,
-                "details": item.get('details') or item.get('description', '')
+                "reasoning": item.get('details') or item.get('description', ''),
+                "details": ''
             } 
 
     if not predictions:
@@ -353,19 +505,48 @@ def predict_interactions():
         for gene in set(found_genes): 
             ensp = get_ensp_from_symbol(gene, species_prefix)
             if ensp and ensp != protein_full_id:
-                id_map[ensp] = {'id': ensp, 'label': gene, 'details': ''}
+                id_map[ensp] = {'id': ensp, 'label': gene, 'reasoning': '', 'details': ''}
     
+    # predicted node ids
     target_ids = list(id_map.keys())
-    bulk_scores = check_string_bulk(protein_full_id, target_ids, species_prefix)
+    # step 1 ~ check for interaction in STRING database
+    string_scores = check_string_bulk(protein_full_id, target_ids, species_prefix)
 
     new_nodes = []
     new_links = []
 
     for tid, info in id_map.items():
+        # step 2 ~ compute resnik similarity between proteins
+        resnik, best_go_pair = compute_resnik(protein_full_id, tid, species_prefix)
+        # step 3 ~ (TODO) get D-SCRIPT interaction probability
+        d_script = 0.01
+
+        shared_bp_text = "No shared GO-BP terms found."
+        if best_go_pair:
+            go_id = best_go_pair[0]
+            if go_id in GO_DAG:
+                go_name = GO_DAG[go_id].name
+                shared_bp_text = f"Shared {go_id} {go_name} (IC: )"
+                info["details"] = shared_bp_text
+
+        string_data = string_scores.get(tid)
+
+        if (string_data):
+            score_source = "STRING"
+            score = string_data['score']
+            evidence_text = f"Evidence: {string_data['type']}"
+            info['details'] = evidence_text
+        else:
+            if (resnik > d_script):
+                score_source = "Resnik-BP"
+                score = resnik
+            else: 
+                score_source = "D-SCRIPT"
+                score = d_script
+
         new_nodes.append({
             "id": tid,
             "label": info["label"],
-            "details": info["details"],
             "origin": model_name,
             "originType": "LLM",
         })
@@ -373,15 +554,20 @@ def predict_interactions():
         new_links.append({
             "source": protein_full_id,
             "target": tid,
-            "score": bulk_scores.get(tid, 0.0),
+            "score": score,
+            "string": score,
+            "resnik": resnik,
+            "d_script": d_script, 
+            "scoreSource": score_source,
             "origin": model_name, 
-            "originType": "LLM"
+            "originType": "LLM",
+            "details": info["details"]
         })
 
     return jsonify({
         "nodes": new_nodes,
         "links": new_links,
-        "raw_chat": raw_text
+        "clean_text": clean_text
     })
 
 @app.route('/')

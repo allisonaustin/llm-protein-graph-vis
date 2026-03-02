@@ -142,7 +142,7 @@ function initGraph() {
               if (currTable === 'Nodes') {
                 highlightNodeTableRow(node?.id);
               } else {
-                filterTableByNode(node);
+                filterTableByNode(node?.id);
               }
               updatePredictionUI(node.id);
               if (settings.PruningMode == 'Neighborhood') {
@@ -153,8 +153,7 @@ function initGraph() {
               clearNodeLabels();
               hoverNode = null;
             }
-            filterTableByNode(node);
-            console.log(highlightLinks);
+            filterTableByNode(node?.id);
             updateHighlight();
             // console.log("Node selected:", node.id)
           })
@@ -201,8 +200,8 @@ function initGraph() {
                 applyNeighborhoodPruning();
               }
             }
-            // Graph.refresh();
             updateHighlight();
+            Graph.refresh();
           });
 
     // light the 3D scene
@@ -212,24 +211,24 @@ function initGraph() {
     // force directed d3 simulation set up
     if (currLayout == 'Force-Directed') {
         Graph.d3Force('collide', d3.forceCollide(collisonStrengthVal))
-            .d3AlphaDecay(0.05)
-            .d3VelocityDecay(0.4)
-            .d3Force("charge", d3.forceManyBody().strength(-150))
-            .d3Force('link',
-                d3.forceLink()
-                .id(d => d.id)
-                .distance(d => {
-                  const similarity = d.similarity || 0.5;
-                  return maxDist - similarity * (maxDist - minDist);
-                }
-                ).strength(s => {
-                  const similarity = s.similarity || 0.5;
-                  return 0.1 + similarity * 0.9;
-                })
+          .d3AlphaDecay(0.02)
+          .d3VelocityDecay(0.5)
+          .d3Force("charge", d3.forceManyBody().strength(-80))
+          .d3Force('link',
+              d3.forceLink()
+              .id(d => d.id)
+              .distance(d => {
+                const similarity = d.similarity || 0.5;
+                return maxDist - similarity * (maxDist - minDist);
+              }
+              ).strength(s => {
+                const similarity = s.similarity || 0.5;
+                return 0.1 + similarity * 0.9;
+              })
         );
     } 
-
     rebuildTable(NODE_TABLE_COLS);
+    updatePredictionUI();
 }
 
 function showNodeLabel(node) {
@@ -393,6 +392,7 @@ function searchAndFocusNode(query) {
         }
       }
       updateHighlight();
+      Graph.refresh();
     } else {
       hoverNode = null;
       alert("Protein not found in the graph.");
@@ -448,10 +448,10 @@ function searchAndFocusLink(sourceId, targetId, taxonId) {
 
 function applyForceDirectedLayout() {
     Graph.d3Force('collide', d3.forceCollide(collisonStrengthVal))
-      .d3Force('center', d3.forceCenter(0, 0, 0))
-      .d3AlphaDecay(0.05)
-      .d3VelocityDecay(0.4)
-      .d3Force("charge", d3.forceManyBody().strength(-200))
+      .d3Force('center', d3.forceCenter(0, 0, 0).strength(0.05))
+      .d3AlphaDecay(0.02)
+      .d3VelocityDecay(0.5)
+      .d3Force("charge", d3.forceManyBody().strength(-80))
       .d3Force('link', 
         d3.forceLink()
         .id(d => d.id)
@@ -785,7 +785,6 @@ function applyNeighborhoodPruning(linkType = false) {
 
     // Update UI
     setStats(visibleNodeIds.size, visibleLinks.length);
-    Graph.refresh();
 }
 
 function applyLinkFilters(linkType = false) {
@@ -807,7 +806,6 @@ function applyLinkFilters(linkType = false) {
   });
 
   Graph.nodeVisibility(node => visibleLinkSet.has(node.id));  
-  Graph.refresh();
   setStats(visibleLinkSet.size, maxAllowed);
 }
 
@@ -843,6 +841,7 @@ function addGraphData(dataPart, reset = false) {
     if (reset) {
         console.log("resetting...");
         resetGraph();
+        rebuildTable(NODE_TABLE_COLS);
         console.log("reset done.");
     }
 
@@ -1013,11 +1012,8 @@ function addGraphData(dataPart, reset = false) {
     
     if (currLayout === 'Spherical') applySphericalLayout(result.nodes);
     
-    if (hoverNode) {
-        setTimeout(() => {
-            searchAndFocusNode(hoverNode);
-        }, 100); 
-    } else updateHighlight();
+    updateHighlight();
+    Graph.refresh();
     // refreshCharts();
 }
 

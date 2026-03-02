@@ -307,27 +307,66 @@ function drawHistogram() {
     });
 }
 
-async function requestLLMPrediction(nodeId) {
-  const history = document.getElementById('chat-history');
-  history.innerHTML += `<p><b>System:</b> Querying interactions for ${nodeId}...</p>`;
-  const res = await fetch('/api/predict', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ protein_id: nodeId })
+function renderChatResponse(fullText, predictedNodes) {
+    const container = document.getElementById('chat-history');
+    const validSymbols = predictedNodes.map(n => n.label);
+    const lines = fullText.split('\n');
+
+    const filteredLines = lines.filter(line => {
+        return validSymbols.some(symbol => {
+            const regex = new RegExp(`\\b${symbol}\\b`, 'i');
+            return regex.test(line);
+        });
     });
 
-    const data = await res.json();
+    if (filteredLines.length === 0) {
+        container.innerHTML += `<div class="model-response"><i>No specific explanations found for the predicted proteins.</i></div>`;
+        return;
+    }
+
+    let filteredText = filteredLines.join('\n\n');
+    let htmlContent = marked.parse(filteredText);
+
+    validSymbols.forEach(symbol => {
+        const node = predictedNodes.find(n => n.label === symbol);
+        const linkHtml = `<a href="#" class="gene-link" onclick="handleSymbolSelection('${node.id}'); return false;">${symbol}</a>`;
+        const symbolRegex = new RegExp(`\\b${symbol}\\b`, 'g');
+        htmlContent = htmlContent.replace(symbolRegex, linkHtml);
+    });
+
     const chatElem = document.createElement('div');
     chatElem.className = "model-response";
-    const formattedChat = marked.parse(data.raw_chat);
-    chatElem.innerHTML = `<b>Model:</b> <div>${formattedChat}</div>`;
-    history.appendChild(chatElem);
-    history.scrollTop = history.scrollHeight;
+    chatElem.innerHTML = `<b>Model:</b> <div>${htmlContent}</div>`;
+    
+    container.appendChild(chatElem);
+    container.scrollTop = container.scrollHeight;
+}
 
-    console.log('New graph data:', data);
+async function requestLLMPrediction(nodeId) {
+    const history = document.getElementById('chat-history');
+    const statusMsg = document.createElement('p');
+    statusMsg.innerHTML = `<b>System:</b> Querying interactions for ${nodeId}...`;
+    history.appendChild(statusMsg);
 
-    if (data.nodes.length > 0) {
-        addGraphData({ nodes: data.nodes, links: data.links });
+    try {
+        const res = await fetch('/api/predict', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ protein_id: nodeId })
+        });
+
+        const data = await res.json();
+        console.log(data);
+        
+        statusMsg.remove();
+        if (data.nodes && data.nodes.length > 0) {
+            addGraphData({ nodes: data.nodes, links: data.links });
+        }
+        renderChatResponse(data.clean_text, data.nodes);
+
+    } catch (err) {
+        console.error(err);
+        statusMsg.innerHTML = `<b>Error:</b> Could not reach the prediction API.`;
     }
 }
 
@@ -341,9 +380,23 @@ function updatePredictionUI(nodeId) {
         predictBtn.style.display = 'block'; 
         predictBtn.onclick = () => requestLLMPrediction(nodeId);
     } else {
+      if (gaf_file) {
         statusText.textContent = "Select a node to generate predictions";
+        predictBtn.style.display = 'none'
+      } else {
+        statusText.textContent = "Select a GAF file"; 
         predictBtn.style.display = 'none'; 
+      }
     }
+}
+
+function handleSymbolSelection(nodeId) {
+  searchAndFocusNode(nodeId);
+  if (currTable == "Nodes") {
+    highlightNodeTableRow(nodeId);
+  } else {
+    filterTableByNode(nodeId);
+  }
 }
 
 async function sendChat() {

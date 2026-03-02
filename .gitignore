@@ -169,7 +169,7 @@ src/visg/static/js/sijax/
 !src/visg/static/data/*.png
 !src/visg/static/data/*.txt
 
-*.ipynb
+src/visg/scripts/*.ipynb
 
 *.protein.links.v12.0.txt
 

@@ -3,6 +3,8 @@ from flask_cors import CORS
 import os
 import flask_sijax
 
+from goatools.obo_parser import GODag
+
 path = os.path.join('.', os.path.dirname(__file__), 'static/js/sijax/')
 
 app = Flask(__name__)
@@ -35,5 +37,8 @@ UDF_RESULT = {
     "dscore": 0.0, 
     "tscore": 0.0
 }
+
+GO_DATA_DIR = "./visg/scripts/go-data/"
+GO_DAG = GODag(os.path.join(GO_DATA_DIR, "go-basic.obo"))
 
 import visg.main_app

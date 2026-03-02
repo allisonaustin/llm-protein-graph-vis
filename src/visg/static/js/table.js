@@ -122,21 +122,22 @@ function populateLinkTable(links) {
         const srcNode = Graph.graphData().nodes.find(n => n.id === source);
        // const clusterCell = srcNode ? `<div style="display:flex; justify-content:flex-end;"><span style="width:10px;height:10px;background-color:${srcNode.clusterColor || '#00a2ff'};border-radius:50%;opacity:0.5;"></span></div>` : '-';
 
-        const details = `Source: ${scoreInfo[link.origin] || link.origin}`;
+        const details = link.details ? link.details : `${scoreInfo[link.origin] || link.origin}`;
 
         const species = source.split('.')[0] || '9606'; 
 
         const dataRef = `https://string-db.org/cgi/network?identifiers=${encodeURIComponent(source)}%0d${encodeURIComponent(target)}&species=${species}`;
         const sourceDataUrl = `<a href="${dataRef}" class="data-link" style="color: #00a2ff;" target="_blank" rel="noopener noreferrer">STRING</a> <i class="bi bi-box-arrow-up-right" style="font-size:0.8em;"></i>`;
-        
+        const scoreSource = link.scoreSource;
+
         return [
             // clusterCell, 
             sourceId,
-            targetId,
-            `<span style="color: ${color}; font-weight: bold;">${score.toFixed(3)}</span>`,
-            species,
-            sourceDataUrl,
+            link.originType == "LLM" ? `<span class="gene-link" font-weight: bold;">${targetId}</span>` : targetId,
+            `<span style="color: ${color}; font-weight: bold;">${score.toFixed(3)}</span> (${scoreSource})`,
             details || '',
+            sourceDataUrl, // lookup
+            species,
             source, // hidden
             target, // hidden
         ];
@@ -159,22 +160,24 @@ function highlightNodeTableRow(nodeId) {
     });
 }
 
-function filterTableByNode(node) {
+function filterTableByNode(nodeId) {
     const table = $('#data-table').DataTable();
     table.search('').columns().search();
 
-    if (!node) {
+    if (!nodeId) {
         return;
     }
 
-    const nodeId = node.id.replace(/\./g, '\\.'); 
+    const escapedId = nodeId.replace(/\./g, '\\.'); 
 
     if (currTable === 'Nodes') {
-        table.column(2).search(`^${nodeId}$`, true, false).draw();
+        table.column(2).search(`^${escapedId}$`, true, false).draw();
     } else {
         $.fn.dataTable.ext.search.push(
             function(settings, data, dataIndex) {
-                return data[6] === node.id || data[7] === node.id;
+                const sourceCell = data[LINK_TABLE_COLS.length - 2];
+                const targetCell = data[LINK_TABLE_COLS.length - 1];
+                return sourceCell === nodeId || targetCell === nodeId;
             }
         );
         table.draw();
