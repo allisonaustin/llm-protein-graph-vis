@@ -33,6 +33,8 @@ import itertools
 import requests
 
 from functools import lru_cache 
+import torch 
+from concurrent.futures import ThreadPoolExecutor
 
 import csv 
 from io import StringIO 
@@ -44,6 +46,9 @@ from goatools.semantic import TermCounts, get_info_content, resnik_sim
 termcounts = None
 ic_map = {}
 max_ic = 1.0
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model = {}
 
 def check_file_updates(obj_response):
 
@@ -226,37 +231,60 @@ def extract_go_ids(go_input):
 
 @lru_cache(maxsize=512)
 def get_protein_info(protein_name, species):
-    """
-    Retrieve GO terms from UniProt from a given protein symbol (e.g. PTEN).
-    """
     base_url = "https://rest.uniprot.org/uniprotkb/search"
     params = {
         "query": f"{protein_name} AND (organism_id:{species})",
         "format": "tsv",
-        "fields": (
-            "accession,id,protein_name,gene_names,organism_name,"
-            "go_f,go_c,go_p,"   # GO terms
-        )
+        "fields": "accession,id,gene_names,go_p,sequence" 
     }
-    go_terms = {"MF": set(), "CC": set(), "BP": set()}
+    
+    res = {"BP": set(), "sequence": "", "gene_name": protein_name}
+    
     try:
         r = requests.get(base_url, params=params, timeout=10)
         r.raise_for_status()
-        data = r.text
+        
+        f = StringIO(r.text)
+        reader = csv.DictReader(f, delimiter='\t')
+        
+        for row in reader:
+            res["BP"] = set(row.get("Gene Ontology (biological process)", "").split("; "))
+            res["sequence"] = row.get("Sequence", "").strip()
+            res["gene_name"] = row.get("Gene Names", protein_name).split(" ")[0]
+            return res # Return the first (best) hit
+            
     except Exception as e:
-        print(f"[Retriever Error] {e}")
-        return go_terms
+        print(f"UniProt error for {protein_name}: {e}")
+        
+    return res
 
-    reader = csv.DictReader(StringIO(data), delimiter="\t")
-    for row in reader: 
-        # Extract GO terms
-        # if row.get("Gene Ontology (molecular function)"):
-        #     go_terms["MF"].update(row["Gene Ontology (molecular function)"].split("; "))
-        # if row.get("Gene Ontology (cellular component)"):
-        #     go_terms["CC"].update(row["Gene Ontology (cellular component)"].split("; "))
-        if row.get("Gene Ontology (biological process)"):
-            go_terms["BP"].update(row["Gene Ontology (biological process)"].split("; "))
-    return go_terms
+@lru_cache(maxsize=512)
+def get_batch_protein_info(gene_names, species):
+    if not gene_names: 
+        return {}    
+    gene_query = " OR ".join([f"gene:{g}" for g in gene_names])
+    base_url = "https://rest.uniprot.org/uniprotkb/search"
+    params = {
+        "query": f"({gene_query}) AND (organism_id:{species}) AND reviewed:true",
+        "format": "tsv",
+        "fields": "accession,id,gene_names,go_p,sequence" 
+    }
+    results = {}
+    try:
+        r = requests.get(base_url, params=params, timeout=20)
+        r.raise_for_status()
+        reader = csv.DictReader(StringIO(r.text), delimiter='\t')
+        
+        for row in reader:
+            gene_name = row.get("Gene Names", "").split(" ")[0].upper()
+            results[gene_name] = {
+                "sequence": row.get("Sequence", ""),
+                "BP": set(row.get("Gene Ontology (biological process)", "").split("; ")),
+                "gene_name": gene_name
+            }
+    except Exception as e:
+        print(f"Batch UniProt error: {e}")
+    return results
 
 @app.route('/api/list-presets')
 def list_presets():
@@ -317,7 +345,6 @@ def upload_ppi():
                     "source": p1, 
                     "target": p2, 
                     "score": score/1000.0, 
-                    "scoreSource": "File",
                     "origin": file.filename,
                     "originType": "File",
                 })
@@ -440,10 +467,44 @@ def clean_llm_response(text):
         return "\n".join(matches).strip()
     return text
 
-def compute_resnik(protein_a, protein_b, species):
+def get_dscript_prediction(gene_a, seq_a, gene_b, seq_b):
+    if not seq_a or not seq_b:
+        print("Could not find sequences for one or both proteins.")
+        return
+    
+    print(f"Predicting: {gene_a} ({len(seq_a)}aa) x {gene_b} ({len(seq_b)}aa)")
+    
+    dscript_url = "http://localhost:5050/predict_pair"
+    payload = {
+        "seq_a": seq_a,
+        "seq_b": seq_b
+    }
+    response = requests.post(dscript_url, json=payload)
+    
+    if response.status_code == 200:
+        result = response.json()
+        return result
+    else:
+        print(f"API Error: {response.text}")
+
+def parallel_dscript_predict(protein_pairs):
+    """
+    protein_pairs: list of tuples (gene_a, seq_a, gene_b, seq_b)
+    """
+    def single_job(pair):
+        gene_a, seq_a, gene_b, seq_b = pair
+        res = get_dscript_prediction(gene_a, seq_a, gene_b, seq_b)
+        return (gene_b, res)
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        results = list(executor.map(single_job, protein_pairs))
+    
+    return dict(results)
+
+def compute_resnik(bp_a, bp_b):
     global max_ic, termcounts, ic_map
-    terms_a = extract_go_ids(get_protein_info(protein_a, species)['BP'])
-    terms_b = extract_go_ids(get_protein_info(protein_b, species)['BP'])
+    terms_a = extract_go_ids(bp_a)
+    terms_b = extract_go_ids(bp_b)
     
     if not terms_a or not terms_b:
         return 0.0, []
@@ -462,6 +523,11 @@ def compute_resnik(protein_a, protein_b, species):
 
     normalized = round(max_resnik / max_ic, 3) if max_ic > 0 else 0.0
     return normalized, best_pair
+
+def get_resnik_data(pair):
+    target_id, bp_a, bp_b = pair
+    resnik_val, best_go = compute_resnik(bp_a, bp_b)
+    return target_id, (resnik_val, best_go)
 
 @app.route('/api/predict', methods=['POST'])
 def predict_interactions():
@@ -509,40 +575,62 @@ def predict_interactions():
     
     # predicted node ids
     target_ids = list(id_map.keys())
-    # step 1 ~ check for interaction in STRING database
+    target_symbols = [info['label'] for info in id_map.values()]
+    
+    # STRING validation
     string_scores = check_string_bulk(protein_full_id, target_ids, species_prefix)
 
     new_nodes = []
     new_links = []
+    prot_a = get_protein_info(protein_full_id, species_prefix)
+    target_info = get_batch_protein_info(tuple(target_symbols), species_prefix)
 
+    # D-SCRIPT binding prediction
+    pairs_to_predict = []
+    if prot_a and prot_a.get('sequence'):
+        for tid, info in id_map.items():
+            symbol = info['label']
+            prot_b = target_info.get(symbol)
+            if prot_b and prot_b.get('sequence'):
+                pairs_to_predict.append((prot_a.get('label', 'A'), prot_a['sequence'], tid, prot_b['sequence']))
+    
+    dscript_results = parallel_dscript_predict(pairs_to_predict)
+
+    # Resnik-BP
+    resnik_tasks = []
     for tid, info in id_map.items():
-        # step 2 ~ compute resnik similarity between proteins
-        resnik, best_go_pair = compute_resnik(protein_full_id, tid, species_prefix)
-        # step 3 ~ (TODO) get D-SCRIPT interaction probability
-        d_script = 0.01
+        symbol = info['label']
+        bp_b = target_info.get(symbol, {}).get('BP', set())
+        resnik_tasks.append((tid, prot_a.get('BP', set()), bp_b))
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        resnik_results = dict(list(executor.map(get_resnik_data, resnik_tasks)))
+    
+    for tid, info in id_map.items():
+        dscript_prediction = dscript_results.get(tid, {})
+        d_prob = dscript_prediction.get('score', 0.0)
+        heatmap = dscript_prediction.get('heatmap', [])
+
+        resnik, best_go_pair = resnik_results.get(tid, (0.0, None))
 
         shared_bp_text = "No shared GO-BP terms found."
         if best_go_pair:
             go_id = best_go_pair[0]
-            if go_id in GO_DAG:
-                go_name = GO_DAG[go_id].name
-                shared_bp_text = f"Shared {go_id} {go_name} (IC: )"
-                info["details"] = shared_bp_text
+            go_name = GO_DAG[go_id].name if go_id in GO_DAG else "Unknown Term"
+            shared_bp_text = f"Share {go_id} {go_name}"
 
-        string_data = string_scores.get(tid)
+        string_data = string_scores.get(tid, {})
+        s_score = string_data.get('score', 0.0)
+        s_type = string_data.get('type', "No STRING evidence")
 
-        if (string_data):
-            score_source = "STRING"
-            score = string_data['score']
-            evidence_text = f"Evidence: {string_data['type']}"
-            info['details'] = evidence_text
+        final_score = max(s_score, resnik, d_prob)
+
+        if s_score >= max(resnik, d_prob) and s_score > 0:
+            detail_msg = f"STRING Evidence: {s_type}"
+        elif d_prob >= resnik and d_prob > 0:
+            detail_msg = f"D-SCRIPT Physical Binding (Prob: {d_prob:.2f})"
         else:
-            if (resnik > d_script):
-                score_source = "Resnik-BP"
-                score = resnik
-            else: 
-                score_source = "D-SCRIPT"
-                score = d_script
+            detail_msg = shared_bp_text
 
         new_nodes.append({
             "id": tid,
@@ -554,14 +642,15 @@ def predict_interactions():
         new_links.append({
             "source": protein_full_id,
             "target": tid,
-            "score": score,
-            "string": score,
+            "score": round(final_score, 4),
+            "string": s_score,
             "resnik": resnik,
-            "d_script": d_script, 
-            "scoreSource": score_source,
+            "d_script": d_prob, 
+            "shared_BP": shared_bp_text,
+            "contact": heatmap,
             "origin": model_name, 
             "originType": "LLM",
-            "details": info["details"]
+            "details": detail_msg
         })
 
     return jsonify({

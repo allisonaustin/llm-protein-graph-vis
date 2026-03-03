@@ -128,13 +128,12 @@ function populateLinkTable(links) {
 
         const dataRef = `https://string-db.org/cgi/network?identifiers=${encodeURIComponent(source)}%0d${encodeURIComponent(target)}&species=${species}`;
         const sourceDataUrl = `<a href="${dataRef}" class="data-link" style="color: #00a2ff;" target="_blank" rel="noopener noreferrer">STRING</a> <i class="bi bi-box-arrow-up-right" style="font-size:0.8em;"></i>`;
-        const scoreSource = link.scoreSource;
 
         return [
             // clusterCell, 
             sourceId,
             link.originType == "LLM" ? `<span class="gene-link" font-weight: bold;">${targetId}</span>` : targetId,
-            `<span style="color: ${color}; font-weight: bold;">${score.toFixed(3)}</span> (${scoreSource})`,
+            `<span style="color: ${color}; font-weight: bold;">${score.toFixed(3)}</span>`,
             details || '',
             sourceDataUrl, // lookup
             species,
@@ -153,6 +152,24 @@ function highlightNodeTableRow(nodeId) {
     table.rows().every(function() {
         const data = this.data();
         if (data[NODE_TABLE_COLS.length-2] === nodeId) {
+            const rowNode = this.node();
+            $(rowNode).addClass('highlight-node');
+            rowNode.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+        }
+    });
+}
+
+// Highlights row in link table when link is clicked in the graph
+function highlightLinkTableRow(link) {
+    const table = $('#data-table').DataTable();
+    
+    table.rows().nodes().to$().removeClass('highlight-node');
+    table.rows().every(function() {
+        const data = this.data();
+        const sourceCell = data[LINK_TABLE_COLS.length - 2];
+        const targetCell = data[LINK_TABLE_COLS.length - 1];
+        if ((sourceCell === link.source.id && targetCell === link.target.id) || 
+            (sourceCell === link.target.id && targetCell === link.source.id)) {
             const rowNode = this.node();
             $(rowNode).addClass('highlight-node');
             rowNode.scrollIntoView({ behavior: 'auto', block: 'nearest' });

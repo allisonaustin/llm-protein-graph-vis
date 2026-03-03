@@ -356,7 +356,7 @@ async function requestLLMPrediction(nodeId) {
         });
 
         const data = await res.json();
-        console.log(data);
+        console.log('response:',data);
         
         statusMsg.remove();
         if (data.nodes && data.nodes.length > 0) {

@@ -153,7 +153,6 @@ function initGraph() {
               clearNodeLabels();
               hoverNode = null;
             }
-            filterTableByNode(node?.id);
             updateHighlight();
             // console.log("Node selected:", node.id)
           })
@@ -194,6 +193,7 @@ function initGraph() {
               srcNode.showLabel = true;
               tgtNode.showLabel = true;
 
+              highlightLinkTableRow(link);
               updatePredictionUI(link.source.id);
               if (settings.PruningMode == 'Neighborhood') {
                 calculateNodeDepths();
