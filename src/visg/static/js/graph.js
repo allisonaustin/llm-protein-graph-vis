@@ -23,7 +23,6 @@ let totalLinks = 0;
 let enableNodeDragging = false;
 let enablePointerInteractions = true;
 let pauseAnimation = true;
-let showLinkWidth = false;
 let showLinkParticle = false;
 let showHighlights = true;
 let showNeighbors = false;
@@ -101,16 +100,15 @@ function initGraph() {
               return colorScale(link.score);
             }
           })
-          .linkWidth(link => {
-              return highlightLinks.has(link) ? 4 : 1;
-          })
           .linkOpacity(1)
           .linkDirectionalParticles(link => {
               if (!showLinkParticle) return 0;              
               return highlightLinks.has(link) ? 8 : 0;
           })
           .linkDirectionalParticleWidth(4)
-          .linkWidth(link => (showLinkWidth && link.penwidth) ? link.penwidth : 0 )
+          .linkWidth(link => {
+              return highlightLinks.has(link) ? 1 : 0;
+          })
           .linkDirectionalArrowLength(2)
           .linkDirectionalArrowRelPos(1)
           .linkDirectionalArrowColor(link => link.color ? pSBC ( 0.1, standardize_color(link.color), color8 ) : 'gray' )
@@ -622,13 +620,6 @@ const updateLinkGroups = () => {
     Graph.linkVisibility(filterLinkByGroup);
 }
 
-// showLinkWidth
-const toggleLinkWidth = () => {
-    showLinkWidth = !showLinkWidth;
-    Graph
-        .linkWidth(Graph.linkWidth())
-}
-
 const toggleClusterColors = () => {
     clusterColors = !clusterColors;
 }
@@ -636,14 +627,10 @@ const toggleClusterColors = () => {
 // Toggle Link Particles
 const toggleLinkAnimation = () => {
     showLinkParticle = !showLinkParticle;
-
-    if(!showLinkParticle){
-      Graph.linkDirectionalParticles(0);
-    }
-    else{
-      Graph.linkDirectionalParticles(link => {
-        return highlightLinks.has(link) ? 8 : 0;
-      });
+    if (!showLinkParticle) {
+        Graph.linkDirectionalParticles(0);
+    } else {
+        Graph.linkDirectionalParticles(link => highlightLinks.has(link) ? 8 : 0);
     }
 }
 
@@ -926,9 +913,6 @@ function addGraphData(dataPart, reset = false) {
         }
     });
 
-    updateClusterList(nodeClusterMap);
-
-    // adding cluster colors around nodes
     Graph.nodeThreeObject(node => {
       const group = new THREE.Group();
       const radius = 4;

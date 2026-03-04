@@ -11,8 +11,8 @@ from visg import data_path, \
                 watchFlag, \
                 min_link_count, \
                 max_link_count, \
-                GO_DATA_DIR, \
-                GO_DAG
+                go_data_dir
+
 # from visg.scripts.listener import Listener
 from visg.scripts.graph_processor import Protein_Graph
 
@@ -40,12 +40,14 @@ import csv
 from io import StringIO 
 
 import pickle
+from goatools.obo_parser import GODag
 from goatools.associations import read_gaf
 from goatools.semantic import TermCounts, get_info_content, resnik_sim
 
 termcounts = None
 ic_map = {}
 max_ic = 1.0
+go_dag = {}
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model = {}
@@ -190,6 +192,24 @@ def create_user_prompt(protein_name):
     )
     return base_prompt.format(protein=protein_name)
 
+@app.route('/build_go_dag', methods=['POST'])
+def build_go_dag():
+    global go_dag
+    try: 
+        data = request.json
+        go_file = data.get('go_file')
+        go_dag = GODag(os.path.join(go_data_dir, go_file))
+        
+        return jsonify({
+            "status": "success",
+            "filename": go_file,
+            "max_ic": max_ic,
+            "term_count": len(ic_map)
+        })
+    except Exception as e:
+        print(f"Error building GO DAG: {e}")
+        return jsonify({"error": str(e)}, 500)
+
 @app.route('/build_ic', methods=['POST'])
 def build_ic():
     global ic_map, termcounts, max_ic
@@ -198,8 +218,8 @@ def build_ic():
     try: 
         data = request.json
         gaf_file = data.get('gaf_file')
-        associations = read_gaf(os.path.join(GO_DATA_DIR, gaf_file), namespace='BP')
-        termcounts = TermCounts(GO_DAG, associations)
+        associations = read_gaf(os.path.join(go_data_dir, gaf_file), namespace='BP')
+        termcounts = TermCounts(go_dag, associations)
         ic_map = {
             go_id: get_info_content(go_id, termcounts)
             for go_id in termcounts.go2genes.keys()
@@ -293,6 +313,14 @@ def list_presets():
         return jsonify([])
     
     files = [f for f in os.listdir(directory) if f.endswith(('.csv', '.tsv', '.txt'))]
+    return jsonify(files)
+
+@app.route('/api/list-gos')
+def list_gos():
+    directory = os.path.join(current_app.static_folder, 'data/go_data')
+    if not os.path.exists(directory):
+        return jsonify([])
+    files = [f for f in os.listdir(directory) if f.endswith(('.obo'))]
     return jsonify(files)
 
 @app.route('/api/list-gafs')
@@ -425,7 +453,7 @@ def get_ensp_from_symbol(symbol, species="9606"):
             preferred_name = result.get('preferredName', '').upper()
             query_item = symbol.upper()
 
-            if query_item == preferred_name: 
+            if (query_item == preferred_name or query_item in preferred_name): 
                 return result.get('stringId')
             else:
                 return None
@@ -523,8 +551,8 @@ def compute_resnik(bp_a, bp_b):
     # Calculate Resnik for all pairs
     for a in terms_a:
         for b in terms_b:
-            if a in GO_DAG and b in GO_DAG:
-                score = resnik_sim(a, b, GO_DAG, termcounts)
+            if a in go_dag and b in go_dag:
+                score = resnik_sim(a, b, go_dag, termcounts)
                 if score > max_resnik:
                     max_resnik = score
                     best_pair = (a, b)
@@ -629,7 +657,7 @@ def predict_interactions():
         shared_bp_text = "No shared GO-BP terms found."
         if best_go_pair:
             go_id = best_go_pair[0]
-            go_name = GO_DAG[go_id].name if go_id in GO_DAG else "Unknown Term"
+            go_name = go_dag[go_id].name if go_id in go_dag else "Unknown Term"
             shared_bp_text = f"{go_id}: {go_name}"
 
         string_data = string_scores.get(tid, {})

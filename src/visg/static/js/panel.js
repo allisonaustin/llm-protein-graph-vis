@@ -318,10 +318,10 @@ function renderChatResponse(fullText, predictedNodes, predictedLinks) {
 
     const row = document.createElement('div');
     row.className = "protein-row-container";
-    row.style = "display: flex; flex-direction:column; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 15px;";
+    row.style = "display: flex; flex-direction:column; gap: 8px; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 10px;";
 
     const chartSection = document.createElement('div');
-    chartSection.style = "display: flex; align-items: center; justify-content: center; gap: 20px; width: 100%; margin-top: 5px;";
+    chartSection.style = "display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; margin-top: 5px;";
 
     // Text (left side)
     const textPortion = document.createElement('div');
@@ -336,7 +336,7 @@ function renderChatResponse(fullText, predictedNodes, predictedLinks) {
     // Radar plot (middle)
     const radarId = `radar-${node.id.replace(/[^a-zA-Z0-9]/g, '-')}`;
     const radarPortion = document.createElement('div');
-    radarPortion.innerHTML = `<div id="${radarId}" style="width: ${chartWidth + 40}px; height: ${chartHeight + 40}px;"></div>`;
+    radarPortion.innerHTML = `<div id="${radarId}" style="width: ${chartWidth + 80}px; height: ${chartHeight + 80}px;"></div>`;
 
     // Contact heatmap (right)
     const heatmapPortion = document.createElement('div');
@@ -408,17 +408,17 @@ function updatePredictionUI(nodeId) {
   const statusText = document.getElementById('prediction-status');
   const predictBtn = document.getElementById('btn-predict');
 
-  if (nodeId && gaf_file) {
+  if (nodeId && go_file && gaf_file) {
     const displayId = nodeId.split('.')[1]? nodeId.split('.')[1] : nodeId; 
     statusText.innerHTML = `Predict interacting partners of <b style="color: #2fa1d6;">${displayId}</b>`;
     predictBtn.style.display = 'block'; 
     predictBtn.onclick = () => requestLLMPrediction(nodeId);
   } else {
-    if (gaf_file) {
+    if (go_file && gaf_file) {
       statusText.textContent = "Select a node to generate predictions";
       predictBtn.style.display = 'none'
     } else {
-      statusText.textContent = "Select a GAF file"; 
+      statusText.textContent = "Select a gene ontology (GO) file and annotation (GAF) file"; 
       predictBtn.style.display = 'none'; 
     }
   }
@@ -465,9 +465,9 @@ function renderRadarChart(containerId, link) {
           rotation: 90
         }
       },
-      width: chartWidth + 20,
-      height: chartHeight + 20,
-      margin: { t: 10, b: 10, l: 50, r: 55 },
+      width: chartWidth + 80,
+      height: chartHeight + 80,
+      margin: { t: 0, b: 0, l: 50, r: 55 },
       showlegend: false,
       paper_bgcolor: 'rgba(0,0,0,0)'
     };

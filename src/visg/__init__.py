@@ -38,7 +38,6 @@ UDF_RESULT = {
     "tscore": 0.0
 }
 
-GO_DATA_DIR = "./visg/scripts/go-data/"
-GO_DAG = GODag(os.path.join(GO_DATA_DIR, "go-basic.obo"))
+go_data_dir = "./visg/scripts/go-data/"
 
 import visg.main_app
