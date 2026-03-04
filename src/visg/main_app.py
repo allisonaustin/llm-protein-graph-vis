@@ -238,7 +238,7 @@ def get_protein_info(protein_name, species):
         "fields": "accession,id,gene_names,go_p,sequence" 
     }
     
-    res = {"BP": set(), "sequence": "", "gene_name": protein_name}
+    res = {"BP": set(), "sequence": "", "geneName": protein_name}
     
     try:
         r = requests.get(base_url, params=params, timeout=10)
@@ -421,7 +421,14 @@ def get_ensp_from_symbol(symbol, species="9606"):
         data = response.json()
         
         if data and len(data) > 0:
-            return data[0].get('stringId')
+            result = data[0]
+            preferred_name = result.get('preferredName', '').upper()
+            query_item = symbol.upper()
+
+            if query_item == preferred_name: 
+                return result.get('stringId')
+            else:
+                return None
         return None
     except Exception as e:
         print(f"Error mapping {symbol}: {e}")
@@ -477,7 +484,8 @@ def get_dscript_prediction(gene_a, seq_a, gene_b, seq_b):
     dscript_url = "http://localhost:5050/predict_pair"
     payload = {
         "seq_a": seq_a,
-        "seq_b": seq_b
+        "seq_b": seq_b,
+        "gene_b": gene_b
     }
     response = requests.post(dscript_url, json=payload)
     
@@ -557,14 +565,15 @@ def predict_interactions():
         symbol = item['symbol']
         ensp = get_ensp_from_symbol(symbol, species_prefix)
         
-        target_id = ensp if ensp else symbol
-
-        if target_id != protein_full_id:
-            id_map[target_id] = {
-                "label": symbol,
-                "reasoning": item.get('details') or item.get('description', ''),
-                "details": ''
-            } 
+        if ensp: 
+            if ensp != protein_full_id:
+                id_map[ensp] = {
+                    "label": symbol,
+                    "reasoning": item.get('details') or item.get('description', ''),
+                    "details": ''
+                }
+        else:
+            print(f"Skipping hallucination or invalid symbol: {symbol}")
 
     if not predictions:
         found_genes = re.findall(r'(?:•|\*|-)\s*([A-Z][A-Z0-9]{2,10})', raw_text)
@@ -592,7 +601,7 @@ def predict_interactions():
             symbol = info['label']
             prot_b = target_info.get(symbol)
             if prot_b and prot_b.get('sequence'):
-                pairs_to_predict.append((prot_a.get('label', 'A'), prot_a['sequence'], tid, prot_b['sequence']))
+                pairs_to_predict.append((prot_a.get('geneName', 'A'), prot_a['sequence'], tid, prot_b['sequence']))
     
     dscript_results = parallel_dscript_predict(pairs_to_predict)
 
@@ -608,8 +617,12 @@ def predict_interactions():
     
     for tid, info in id_map.items():
         dscript_prediction = dscript_results.get(tid, {})
-        d_prob = dscript_prediction.get('score', 0.0)
-        heatmap = dscript_prediction.get('heatmap', [])
+        if dscript_prediction: 
+            d_prob = dscript_prediction.get('score', 0.0)
+            heatmap = dscript_prediction.get('heatmap', [])
+        else:
+            d_prob = 0.0 
+            heatmap = []
 
         resnik, best_go_pair = resnik_results.get(tid, (0.0, None))
 
@@ -617,7 +630,7 @@ def predict_interactions():
         if best_go_pair:
             go_id = best_go_pair[0]
             go_name = GO_DAG[go_id].name if go_id in GO_DAG else "Unknown Term"
-            shared_bp_text = f"Share {go_id} {go_name}"
+            shared_bp_text = f"{go_id}: {go_name}"
 
         string_data = string_scores.get(tid, {})
         s_score = string_data.get('score', 0.0)

@@ -43,6 +43,8 @@ def predict_pair():
         })
     except Exception as e:
         import traceback
+        if data:
+            print(f"Error assessing {str(data['gene_b'])}")
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
