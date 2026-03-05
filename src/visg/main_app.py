@@ -258,7 +258,7 @@ def get_protein_info(protein_name, species):
         "fields": "accession,id,gene_names,go_p,sequence" 
     }
     
-    res = {"BP": set(), "sequence": "", "geneName": protein_name}
+    res = {"BP": set(), "MF": set(), "CC": set(), "sequence": "", "geneName": protein_name}
     
     try:
         r = requests.get(base_url, params=params, timeout=10)
@@ -269,6 +269,8 @@ def get_protein_info(protein_name, species):
         
         for row in reader:
             res["BP"] = set(row.get("Gene Ontology (biological process)", "").split("; "))
+            res["MF"] = set(row.get("Gene Ontology (molecular function)", "").split("; "))
+            res["CC"] = set(row.get("Gene Ontology (cellular component)", "").split("; "))
             res["sequence"] = row.get("Sequence", "").strip()
             res["gene_name"] = row.get("Gene Names", protein_name).split(" ")[0]
             return res # Return the first (best) hit

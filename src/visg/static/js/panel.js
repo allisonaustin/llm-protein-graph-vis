@@ -318,10 +318,10 @@ function renderChatResponse(fullText, predictedNodes, predictedLinks) {
 
     const row = document.createElement('div');
     row.className = "protein-row-container";
-    row.style = "display: flex; flex-direction:column; gap: 8px; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 10px;";
+    row.style = "display: flex; flex-direction:column; gap: 8px; margin-bottom: 10px; border-bottom: 1px solid #333;";
 
     const chartSection = document.createElement('div');
-    chartSection.style = "display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; margin-top: 5px;";
+    chartSection.style = "display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;";
 
     // Text (left side)
     const textPortion = document.createElement('div');

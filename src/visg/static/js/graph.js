@@ -80,7 +80,7 @@ function initGraph() {
             } 
             if(highlightNodes.has(node.id)) {
               if (showHighlights) {
-                return node.originType == "LLM" ? "#D41159" : '#FFA000';
+                return node.originType == "LLM" ? '#d41159' : '#ffff00';
               } else {
                 return "white";
               }
@@ -89,25 +89,25 @@ function initGraph() {
             }
           })
           .nodeResolution(20)
+          // .linkWidth(link => {
+          //     return (showHighlights && highlightLinks.has(getLinkId(link))) ? 0.8 : 0;
+          // })
           .linkColor(link => {
-            if(highlightLinks.has(link)) {
-              if (showHighlights) {
-                return link.originType == "LLM" ? "#D41159" : '#ffff00';
-              } else {
-                colorScale(link.score);
-              }
-            } else {
+            if (showHighlights && highlightLinks.has(getLinkId(link))) {
+              return link.originType == "LLM" ? '#d41159' : '#ffff00' ;
+            }
+            else {
               return colorScale(link.score);
             }
-          })
+        })
           .linkOpacity(1)
           .linkDirectionalParticles(link => {
               if (!showLinkParticle) return 0;              
-              return highlightLinks.has(link) ? 8 : 0;
+              return highlightLinks.has(getLinkId(link)) ? 8 : 0;
           })
           .linkDirectionalParticleWidth(4)
-          .linkWidth(link => {
-              return highlightLinks.has(link) ? 1 : 0;
+          .linkDirectionalParticleColor(link => {
+            return link.originType == "LLM" ? '#d41159' : '#ffff00'
           })
           .linkDirectionalArrowLength(2)
           .linkDirectionalArrowRelPos(1)
@@ -132,7 +132,7 @@ function initGraph() {
                 (l.source.id || l.source) === node.id ||
                 (l.target.id || l.target) === node.id
               );
-              matchingLinks.forEach(link => highlightLinks.add(link));
+              matchingLinks.forEach(link => highlightLinks.add(getLinkId(link)));
               
               // Set the single hovered node
               hoverNode = node.id;
@@ -181,7 +181,7 @@ function initGraph() {
 
             if (link && !highlightNodes.has(link.source.id) && !highlightNodes.has(link.target.id)) {
               hoverLink = link;
-              highlightLinks.add(link);
+              highlightLinks.add(getLinkId(link));
               highlightNodes.add(link.source.id);
               highlightNodes.add(link.target.id);
 
@@ -274,6 +274,8 @@ const enableNodeRearrange = () => {
             .enableNodeDrag(Graph.enableNodeDrag());
 }
 
+const getLinkId = (l) => `${l.source.id}|${l.target.id}`;
+
 function assignLinkCurvature(links) {
     const linkPairs = {};
 
@@ -343,7 +345,7 @@ function searchAndFocusCluster(clusterColor) {
           const t = l.target.id || l.target;
           return s === node.id || t === node.id;
       });
-      matchingLinks.forEach(link => highlightLinks.add(link));      
+      matchingLinks.forEach(link => highlightLinks.add(getLinkId(link)));      
       // node.showLabel = true; 
     });
     updateHighlight();
@@ -379,7 +381,7 @@ function searchAndFocusNode(query) {
           (l.source.id || l.source) === node.id ||
           (l.target.id || l.target) === node.id
         );
-        matchingLinks.forEach(link => highlightLinks.add(link));
+        matchingLinks.forEach(link => highlightLinks.add(getLinkId(link)));
 
         hoverNode = node.id;
         showNodeLabel(node);
@@ -427,7 +429,7 @@ function searchAndFocusLink(sourceId, targetId, taxonId) {
 
       highlightNodes.add(sourceId);
       highlightNodes.add(targetId);
-      highlightLinks.add(link);
+      highlightLinks.add(getLinkId(link));
       hoverLink = link;
 
       updatePredictionUI(sourceId);
@@ -585,7 +587,7 @@ function applySphericalLayout(nodes, numLayers = 4) {
 }
 
 function passesPruning(link, index) {
-    if (highlightLinks.has(link)) return true;
+    if (highlightLinks.has(getLinkId(link))) return true;
 
     if (settings.PruningMode === 'Global') {
         const maxAllowed = Math.floor(settings.MaxLinks);
@@ -630,7 +632,8 @@ const toggleLinkAnimation = () => {
     if (!showLinkParticle) {
         Graph.linkDirectionalParticles(0);
     } else {
-        Graph.linkDirectionalParticles(link => highlightLinks.has(link) ? 8 : 0);
+        Graph.linkDirectionalParticles(link => highlightLinks.has(getLinkId(link)) ? 8 : 0);
+        Graph.linkDirectionalParticleColor(Graph.linkDirectionalParticleColor());
     }
 }
 
@@ -666,16 +669,15 @@ function clearPruning() {
 
 // trigger update of highlighted objects in scene
 function updateHighlight() {
-    // Graph.nodeColor(Graph.nodeColor());
-    Graph.nodeThreeObject(Graph.nodeThreeObject());
-    Graph
-        .linkColor(Graph.linkColor())
-        .linkWidth(Graph.linkWidth());
-    if (!showLinkParticle) {
-        Graph.linkDirectionalParticles(0);
-    } else {
-        Graph.linkDirectionalParticles(link => highlightLinks.has(link) ? 8 : 0);
-    }
+  // Graph.nodeColor(Graph.nodeColor());
+  Graph.nodeThreeObject(Graph.nodeThreeObject());
+  Graph
+    .linkColor(Graph.linkColor())
+  if (!showLinkParticle) {
+    Graph.linkDirectionalParticles(0);
+  } else {
+    Graph.linkDirectionalParticles(link => (showHighlights && highlightLinks.has(getLinkId(link))) ? 8 : 0);
+  }
 }
 
 // module for timed calls for graph updates
@@ -934,7 +936,7 @@ function addGraphData(dataPart, reset = false) {
       if (isFocused) {
           baseColor = FOCUS_COLOR; 
       } else if (isHighlighted && !isHovered) {
-          baseColor = (node.originType === "LLM") ? "#D41159": "#FFA000";
+          baseColor = (node.originType == "LLM") ? '#d41159' : '#ffff00';
       }
 
       const mainSphere = new THREE.Mesh(
@@ -973,7 +975,7 @@ function addGraphData(dataPart, reset = false) {
           return s === hoverNode || t === hoverNode;
       });
       updatedLinks.forEach(l => {
-        highlightLinks.add(l)
+        highlightLinks.add(getLinkId(l))
         highlightNodes.add(l.source.id);
         highlightNodes.add(l.target.id);
       });
