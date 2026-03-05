@@ -220,85 +220,6 @@ function updateClusterList(nodeClusterMap) {
     .style("font-size", "12px")
 }
 
-function drawHistogram() {
-  const svg = d3.select("#score-histogram");
-  if (!svg) return;
-  const container = svg.node().closest(".chart-frame");
-  const width = container.clientWidth;
-  const height = 140;
-
-  const margin = { top: 20, right: 20, bottom: 30, left: 40 };
-  const innerWidth = width - margin.left - margin.right;
-  const innerHeight = height - margin.top - margin.bottom;
-
-  const tooltip = d3.select("#tooltip");
-
-  if (svg.select(".chart-layer").empty()) {
-    const chartG = svg.append("g")
-      .attr("class", "chart-layer")
-      .attr("transform", `translate(${margin.left},${margin.top})`);
-
-    chartG.append("g").attr("class", "x-axis")
-      .attr("transform", `translate(0,${innerHeight})`);
-
-    chartG.append("g").attr("class", "y-axis");
-
-    chartG.append("g").attr("class", "bars");
-  }
-
-  const x = d3.scaleLinear()
-    .domain([0, 1])
-    .range([0, innerWidth]);
-
-  const binCount = 10;
-  const binStep = 1 / binCount;
-  const thresholds = d3.range(0, 1 + binStep, binStep);
-
-  const scores = Graph.graphData().links
-    .map(d => d.score);
-
-  const bins = d3.histogram()
-    .domain([0, 1])
-    .thresholds(thresholds)(scores);
-
-  const maxCount = d3.max(bins, d => d.length);
-
-  const y = d3.scaleLinear()
-    .domain([0, maxCount])
-    .range([innerHeight, 0]);
-
-  const barWidth = (x(thresholds[1]) - x(thresholds[0])) - 1;
-
-  const chartG = svg.select(".chart-layer");
-
-  // update axes only — DO NOT redraw
-  chartG.select(".x-axis").call(d3.axisBottom(x).ticks(5));
-  chartG.select(".y-axis").call(d3.axisLeft(y).ticks(5));
-
-  // STRING
-  chartG.select(".bars")
-    .selectAll("rect")
-    .data(bins)
-    .join("rect")
-    .attr("x", d => x(d.x0))
-    .attr("y", d => y(d.length))
-    .attr("width", barWidth)
-    .attr("height", d => innerHeight - y(d.length))
-    .attr("fill", STRING_COLOR)
-    .on("mouseover", function(event, d) {
-      tooltip.style("opacity", 1)
-        .html(`Count: ${d.length}`)
-        .style("left", `${event.pageX + 10}px`)
-        .style("top", `${event.pageY - 28}px`);
-
-      d3.select(this).attr("fill", "#a9e8e3");
-    })
-    .on("mouseout", function() {
-      tooltip.style("opacity", 0);
-      d3.select(this).attr("fill", STRING_COLOR);
-    });
-}
-
 function renderChatResponse(fullText, predictedNodes, predictedLinks) {
   const container = document.getElementById('chat-history');
 
@@ -344,16 +265,29 @@ function renderChatResponse(fullText, predictedNodes, predictedLinks) {
     heatmapPortion.innerHTML = `
       <div style="text-align:center;">
         <div id="${heatmapId}" style="width: ${chartWidth}px; height: ${chartHeight}px; background: #111; border-radius: 4px; border: 1px solid #444;"></div>
-        <small style="font-size: 11px; color: #666; display:block; margin-top:2px;">Predicted Contact Map</small>
+          <small style="font-size: 11px; color: #666; display:block; margin-top:2px;">Predicted Contact Map</small>
       </div>`;
+    heatmapPortion.style.cursor = "zoom-in";
 
     chartSection.appendChild(radarPortion);
     chartSection.appendChild(heatmapPortion);
 
     const footer = document.createElement('div');
-    const micaText = link.shared_BP || "No shared GO terms";
     footer.style = "font-size: 0.75rem; color: #aaa; font-style: italic; background: rgba(255,255,255,0.03); padding: 4px 10px; border-radius: 4px; border-left: 2px solid #444;";
-    footer.innerHTML = `<i class="bi bi-diagram-3" style="margin-right: 5px;"></i><strong>MICA:</strong> ${micaText}`;
+    footer.innerHTML = `
+                       <div style="margin-bottom: 4px;"><strong>Shared GO Terms (MICAs):</strong></div>
+                        <div style="display: flex; align-items: center; margin-bottom: 2px;">
+                          <i class="bi bi-diagram-3" style="margin-right: 8px; color: #00a2ff;"></i>
+                          <strong>BP:</strong>&nbsp;${link.shared_BP || "None"}
+                        </div>
+                        <div style="display: flex; align-items: center; margin-bottom: 2px;">
+                          <i class="bi bi-diagram-3" style="margin-right: 8px; color: #00ff88;"></i>
+                          <strong>MF:</strong>&nbsp;${link.shared_MF || "None"}
+                        </div>
+                        <div style="display: flex; align-items: center;">
+                          <i class="bi bi-diagram-3" style="margin-right: 8px; color: #ffcc00;"></i>
+                          <strong>CC:</strong>&nbsp;${link.shared_CC || "None"}
+                        </div>`;
 
     row.append(textPortion);
     row.appendChild(footer);
@@ -363,7 +297,9 @@ function renderChatResponse(fullText, predictedNodes, predictedLinks) {
     renderRadarChart(radarId, link);
     if (link && link.contact && link.contact.length > 0) {
       renderContactMap(heatmapId, link.contact);
-      heatmapPortion.onclick = () => handleSymbolSelection(node.id);
+      heatmapPortion.onclick = () => {
+        expandHeatmap(link.contact, symbol);
+      }
     } else {
       document.getElementById(heatmapId).innerHTML = 
         "<div style='display:flex; height:100%; align-items:center; justify-content:center; text-align:center; font-size:9px; color:#555;'>No heatmap available</div>";
@@ -373,7 +309,11 @@ function renderChatResponse(fullText, predictedNodes, predictedLinks) {
   if (container.innerHTML === "") {
     container.innerHTML = `<div class="model-response"><i>No specific explanations found for the predicted proteins.</i></div>`;
   }
-  container.scrollTop = container.scrollHeight;
+  const isAtBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 50;
+  if (isAtBottom) {
+    container.scrollTop = container.scrollHeight;
+  }
+  // container.scrollTop = container.scrollHeight;
 }
 
 async function requestLLMPrediction(nodeId) {
@@ -437,14 +377,19 @@ function renderRadarChart(containerId, link) {
   setTimeout(() => {
     const data = [{
       type: 'scatterpolar',
-      r: [link.string || 0, link.d_script || 0, link.resnik || 0, link.string || 0],
-      theta: ['STRING', 'D-SCRIPT', 'Resnik-BP', 'STRING'],
+      r: [link.string || 0, link.d_script || 0, link.resnik_bp || 0, link.resnik_mf || 0, link.resnik_cc || 0, link.string || 0],
+      theta: ['STRING', 'D-SCRIPT', 'Resnik-BP', 'Resnik-MF', 'Resnik-CC', 'STRING'],
       fill: 'toself',
       fillcolor: 'rgba(0, 162, 255, 0.3)',
       line: { 
         color: '#00a2ff', 
         width: 2,
         shape: 'linear'
+      },
+      hoverlabel: {
+        bgcolor: '#222',
+        bordercolor: '#00a2ff',
+        font: { color: '#fff', size: 12 }
       },
       marker: { size: 2 }
     }];
@@ -472,7 +417,7 @@ function renderRadarChart(containerId, link) {
       paper_bgcolor: 'rgba(0,0,0,0)'
     };
 
-    Plotly.newPlot(containerId, data, layout, { staticPlot: true });
+    Plotly.newPlot(containerId, data, layout, { staticPlot: false });
   }, 10);
 }
 
@@ -490,87 +435,75 @@ function renderContactMap(containerId, data) {
     }];
 
     const layout = {
-        margin: { t: 0, b: 0, l: 0, r: 0 },
-        width: chartWidth,
-        height: chartHeight,
-        xaxis: { visible: false, fixedrange: true },
-        yaxis: { visible: false, fixedrange: true },
-        paper_bgcolor: 'rgba(255, 255, 255, 0)',
-        plot_bgcolor: 'rgba(255, 255, 255, 0)',
+      margin: { t: 0, b: 0, l: 0, r: 0 },
+      width: chartWidth,
+      height: chartHeight,
+      xaxis: { visible: false, fixedrange: true },
+      yaxis: { visible: false, fixedrange: true },
+      paper_bgcolor: 'rgba(255, 255, 255, 0)',
+      plot_bgcolor: 'rgba(255, 255, 255, 0)',
     };
 
     Plotly.newPlot(containerId, plotData, layout, { staticPlot: true });
   }, 10);
 }
 
-async function sendChat() {
-  const inputElem = document.getElementById('chat-input');
-  const userInput = inputElem.value.trim();
-  console.log('prompt:',inputElem.value);
-  if (!userInput) return;
+function expandHeatmap(contactData, symbol) {
+    const overlay = document.createElement('div');
+    overlay.style = `
+        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+        background: rgba(0,0,0,0.85); z-index: 9999;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        backdrop-filter: blur(5px);
+    `;
 
-  const history = document.getElementById('chat-history');
-  history.innerHTML += `<p><strong>You:</strong> ${userInput}</p>`;
-  // clearing input field
-  inputElem.value = '';
+    const graphDiv = document.createElement('div');
+    graphDiv.id = 'expanded-heatmap-container';
+    graphDiv.style = "width: 80vw; height: 80vh; background: #000; border: 1px solid #444; border-radius: 8px;";
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.innerText = "Close";
+    closeBtn.style = "margin-top: 20px; padding: 10px 20px; cursor: pointer; background: #333; color: white; border: 1px solid #555; border-radius: 4px;";
+    closeBtn.onclick = () => document.body.removeChild(overlay);
 
-  const chatElem = document.createElement('p');
-  chatElem.innerHTML = `<strong>Model:</strong> <span id="chat-reply-${Date.now()}"></span>`;
-  history.appendChild(chatElem);
-  const replyContainer = document.getElementById(`chat-reply-${Date.now()}`);
+    overlay.appendChild(graphDiv);
+    overlay.appendChild(closeBtn);
+    document.body.appendChild(overlay);
 
-  const res = await fetch('http://localhost:11434/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'llama3.1',
-      stream: true,  
-      messages: [
-        { role: 'system', content: 'Please keep your answers concise, around 2-3 sentences.' },
-        { role: 'user', content: userInput }
-      ]
-    })
-  });
+    const data = [{
+      z: contactData,
+      type: 'heatmap',
+      colorscale: [
+        [0, '#ffffff'], 
+        [1, '#08306b']
+      ],
+      zmin: 0,
+      zmax: 1,
+      showscale: true,
+      colorbar: { title: 'Prob.', tickfont: {color: '#333'} }
+    }];
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder('utf-8');
-  let buffer = '';
-  let markdownBuffer = '';
-  replyContainer.textContent = '';
+    const layout = {
+      autosize: true,
+      xaxis: { 
+        title: 'Residue Index (Protein A)', 
+        color: '#ccc', 
+        gridcolor: '#333',
+        scaleanchor: 'y'
+      },
+      yaxis: { 
+        title: `Residue Index (${symbol})`, 
+        visible: true,
+        color: '#ccc', 
+        gridcolor: '#333' 
+      },
+      paper_bgcolor: 'rgba(255, 255, 255, 0)',
+      plot_bgcolor: 'rgba(255, 255, 255, 0)',
+    };
 
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop();
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const json = JSON.parse(line);
-        const chunk = json.message?.content;
-        if (chunk) {
-          markdownBuffer += chunk;
-          replyContainer.textContent += chunk;
-          history.scrollTop = history.scrollHeight;
-        }
-      } catch (err) {
-        console.warn("Skipping invalid line:", line);
-      }
-    }
-  }
-  replyContainer.innerHTML = marked.parse(markdownBuffer);
+    Plotly.newPlot(graphDiv, data, layout, { responsive: true });    
+    overlay.onclick = (e) => { if(e.target === overlay) document.body.removeChild(overlay); };
 }
-
-// const chatInput = document.getElementById("chat-input");
-
-// chatInput.addEventListener("keydown", (e) => {
-//   if (e.key === "Enter") {
-//     sendChat();
-//   }
-// });
 
 function toggleInfoBody(event) {
   const container = document.getElementById('protein-info-container');

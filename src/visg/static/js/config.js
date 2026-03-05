@@ -12,4 +12,4 @@ const colorScale = d3.scaleLinear()
     .domain([0, 1.0])  
     .range(COLOR_SCALE);
 const NODE_TABLE_COLS = ["Protein IDs", "Link Count", "ENSP_full", "ClusterID"];
-const LINK_TABLE_COLS = ["ProteinA", "ProteinB", "Score", "Details", "Lookup", "Species", "ProteinA_full", "ProteinB_full"];
+const LINK_TABLE_COLS = ["ProteinA", "ProteinB", "Score", "Lookup", "Species", "ProteinA_full", "ProteinB_full"];

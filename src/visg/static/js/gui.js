@@ -8,7 +8,7 @@ const Settings = function() {
     this.ShowLinkDirections = false;
     this.ShowNodeNeighbors = false;
     this.ShowNodeInfo = false;
-    this.MaxDepth = 2;
+    this.Hops = 2;
     this.MaxLinks = 3000;
     this.showAlLinks = true;
     this.NodeDistance = collisonStrengthVal;
@@ -36,7 +36,7 @@ folder3.add(settings, 'ShowHighlights')
     .name('Show Highlights')
     .onChange(toggleHighlights);
 folder3.add(settings, 'ShowLinkDirections')
-    .name('Show Link Directions')
+    .name('Show Link Animations')
     .onChange(toggleLinkAnimation);
 folder3.add(settings, 'ShowNodeNeighbors')
     .name('Show Node Neighbors')
@@ -48,9 +48,9 @@ folder3.open()
 
 const pruningController = folder4.add(settings, 'PruningMode', ['Global', 'Neighborhood'])
     .name('Pruning Mode')
-const depthController = folder4.add(settings, 'MaxDepth', 0, 20)
+const depthController = folder4.add(settings, 'Hops', 0, 20)
     .step(1)
-    .name('MaxDepth')
+    .name('Hops')
 const linksController = folder4.add(settings, 'MaxLinks', 0, maxLimit).step(1)
     .onChange(applyLinkFilters);
 folder4.open();

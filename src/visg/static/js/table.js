@@ -134,7 +134,6 @@ function populateLinkTable(links) {
             sourceId,
             link.originType == "LLM" ? `<span class="gene-link" font-weight: bold;">${targetId}</span>` : targetId,
             `<span style="color: ${color}; font-weight: bold;">${score.toFixed(3)}</span>`,
-            details || '',
             sourceDataUrl, // lookup
             species,
             source, // hidden

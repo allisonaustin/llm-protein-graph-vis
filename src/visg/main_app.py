@@ -42,12 +42,13 @@ from io import StringIO
 import pickle
 from goatools.obo_parser import GODag
 from goatools.associations import read_gaf
+from goatools.anno.gaf_reader import GafReader
 from goatools.semantic import TermCounts, get_info_content, resnik_sim
 
-termcounts = None
+termcounts = {}
 ic_map = {}
-max_ic = 1.0
 go_dag = {}
+annotations = {"BP": {}, "MF": {}, "CC": {}}
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model = {}
@@ -203,7 +204,6 @@ def build_go_dag():
         return jsonify({
             "status": "success",
             "filename": go_file,
-            "max_ic": max_ic,
             "term_count": len(ic_map)
         })
     except Exception as e:
@@ -212,29 +212,33 @@ def build_go_dag():
 
 @app.route('/build_ic', methods=['POST'])
 def build_ic():
-    global ic_map, termcounts, max_ic
-
-    print("Building Information Content (IC) lookup table...")
+    global annotations, ic_map, termcounts
+    print("Building IC lookup table...")
     try: 
         data = request.json
-        gaf_file = data.get('gaf_file')
-        associations = read_gaf(os.path.join(go_data_dir, gaf_file), namespace='BP')
-        termcounts = TermCounts(go_dag, associations)
-        ic_map = {
-            go_id: get_info_content(go_id, termcounts)
-            for go_id in termcounts.go2genes.keys()
-        }
-        max_ic = max(ic_map.values()) if ic_map else 1.0
+        gaf_file = os.path.join(go_data_dir, data.get('gaf_file'))
+        gaf = GafReader(gaf_file)
+        ns2assc = gaf.get_ns2assc()
+        for ns in annotations.keys():
+            annots_ns = ns2assc.get(ns, {})
+            for gene, gos in annots_ns.items():
+                annotations[ns].setdefault(gene, set()).update(gos)
+            
+            tc = TermCounts(go_dag, annotations[ns])
+            termcounts[ns] = tc
+            ic_map[ns] = {go_id: get_info_content(go_id, tc)
+                       for go_id in tc.go2genes}
+                
+        print(f"Successfully loaded terms across BP, MF, and CC.")
         
         return jsonify({
             "status": "success",
             "filename": gaf_file,
-            "max_ic": max_ic,
             "term_count": len(ic_map)
         })
     except Exception as e:
         print(f"Error building IC: {e}")
-        return jsonify({"error": str(e)}, 500)
+        return jsonify({"error": str(e)}), 500
 
 def extract_go_ids(go_input):
     """
@@ -255,7 +259,7 @@ def get_protein_info(protein_name, species):
     params = {
         "query": f"{protein_name} AND (organism_id:{species})",
         "format": "tsv",
-        "fields": "accession,id,gene_names,go_p,sequence" 
+        "fields": "accession,id,gene_names,go_p,go_f,go_c,sequence" 
     }
     
     res = {"BP": set(), "MF": set(), "CC": set(), "sequence": "", "geneName": protein_name}
@@ -289,7 +293,7 @@ def get_batch_protein_info(gene_names, species):
     params = {
         "query": f"({gene_query}) AND (organism_id:{species}) AND reviewed:true",
         "format": "tsv",
-        "fields": "accession,id,gene_names,go_p,sequence" 
+        "fields": "accession,id,gene_names,go_p,go_f,go_c,sequence" 
     }
     results = {}
     try:
@@ -302,6 +306,8 @@ def get_batch_protein_info(gene_names, species):
             results[gene_name] = {
                 "sequence": row.get("Sequence", ""),
                 "BP": set(row.get("Gene Ontology (biological process)", "").split("; ")),
+                "MF": set(row.get("Gene Ontology (molecular function)", "").split("; ")),
+                "CC": set(row.get("Gene Ontology (cellular component)", "").split("; ")),
                 "gene_name": gene_name
             }
     except Exception as e:
@@ -539,13 +545,17 @@ def parallel_dscript_predict(protein_pairs):
     
     return dict(results)
 
-def compute_resnik(bp_a, bp_b):
+def compute_resnik(input_a, input_b, ns):
     global max_ic, termcounts, ic_map
-    terms_a = extract_go_ids(bp_a)
-    terms_b = extract_go_ids(bp_b)
+
+    ns_termcounts = termcounts.get(ns) 
+    ns_ic_map = ic_map.get(ns, {})
+
+    terms_a = extract_go_ids(input_a)
+    terms_b = extract_go_ids(input_b)
     
-    if not terms_a or not terms_b:
-        return 0.0, []
+    if not terms_a or not terms_b or ns_termcounts is None:
+        return 0.0, None
 
     max_resnik = 0.0
     best_pair = None
@@ -554,18 +564,19 @@ def compute_resnik(bp_a, bp_b):
     for a in terms_a:
         for b in terms_b:
             if a in go_dag and b in go_dag:
-                score = resnik_sim(a, b, go_dag, termcounts)
+                score = resnik_sim(a, b, go_dag, ns_termcounts)
                 if score > max_resnik:
                     max_resnik = score
                     best_pair = (a, b)
 
+    max_ic = max(ns_ic_map.values()) if ns_ic_map else 1.0
     normalized = round(max_resnik / max_ic, 3) if max_ic > 0 else 0.0
     return normalized, best_pair
 
-def get_resnik_data(pair):
-    target_id, bp_a, bp_b = pair
-    resnik_val, best_go = compute_resnik(bp_a, bp_b)
-    return target_id, (resnik_val, best_go)
+def get_resnik_data(task):
+    (tid, ns), terms_a, terms_b = task
+    resnik_val, mica_id = compute_resnik(terms_a, terms_b, ns)
+    return (tid, ns), (resnik_val, mica_id)
 
 @app.route('/api/predict', methods=['POST'])
 def predict_interactions():
@@ -636,44 +647,45 @@ def predict_interactions():
     dscript_results = parallel_dscript_predict(pairs_to_predict)
 
     # Resnik-BP
+    namespaces = ['BP', 'MF', 'CC']
     resnik_tasks = []
     for tid, info in id_map.items():
         symbol = info['label']
-        bp_b = target_info.get(symbol, {}).get('BP', set())
-        resnik_tasks.append((tid, prot_a.get('BP', set()), bp_b))
+        target_prot = target_info.get(symbol, {})
+        for ns in ['BP', 'MF', 'CC']:
+            resnik_tasks.append(((tid, ns), prot_a.get(ns, set()), target_prot.get(ns, set())))
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         resnik_results = dict(list(executor.map(get_resnik_data, resnik_tasks)))
-    
+
     for tid, info in id_map.items():
         dscript_prediction = dscript_results.get(tid, {})
-        if dscript_prediction: 
+        if dscript_prediction:
             d_prob = dscript_prediction.get('score', 0.0)
             heatmap = dscript_prediction.get('heatmap', [])
         else:
-            d_prob = 0.0 
+            d_prob = 0.0
             heatmap = []
 
-        resnik, best_go_pair = resnik_results.get(tid, (0.0, None))
+        # Retrieve Resnik scores for all three namespaces
+        scores = {}
+        shared_texts = {}
 
-        shared_bp_text = "No shared GO-BP terms found."
-        if best_go_pair:
-            go_id = best_go_pair[0]
-            go_name = go_dag[go_id].name if go_id in go_dag else "Unknown Term"
-            shared_bp_text = f"{go_id}: {go_name}"
+        for ns in namespaces:
+            score, best_pair = resnik_results.get((tid, ns), (0.0, None))
+            scores[ns] = score
+            
+            if best_pair:
+                go_id = best_pair[0]
+                go_name = go_dag[go_id].name if go_id in go_dag else "Unknown Term"
+                shared_texts[ns] = f"{go_id}: {go_name}"
+            else:
+                shared_texts[ns] = f"No shared {ns} terms found."
 
         string_data = string_scores.get(tid, {})
         s_score = string_data.get('score', 0.0)
         s_type = string_data.get('type', "No STRING evidence")
-
-        final_score = max(s_score, resnik, d_prob)
-
-        if s_score >= max(resnik, d_prob) and s_score > 0:
-            detail_msg = f"STRING Evidence: {s_type}"
-        elif d_prob >= resnik and d_prob > 0:
-            detail_msg = f"D-SCRIPT Physical Binding (Prob: {d_prob:.2f})"
-        else:
-            detail_msg = shared_bp_text
+        best_score = max(s_score, scores["BP"], scores["MF"], scores["CC"], d_prob)
 
         new_nodes.append({
             "id": tid,
@@ -685,15 +697,18 @@ def predict_interactions():
         new_links.append({
             "source": protein_full_id,
             "target": tid,
-            "score": round(final_score, 4),
+            "score": round(best_score, 4),
             "string": s_score,
-            "resnik": resnik,
+            "resnik_bp": scores["BP"],
+            "resnik_mf": scores["MF"],
+            "resnik_cc": scores["CC"],
             "d_script": d_prob, 
-            "shared_BP": shared_bp_text,
+            "shared_BP": shared_texts['BP'],
+            "shared_MF": shared_texts['MF'],
+            "shared_CC": shared_texts['CC'],
             "contact": heatmap,
             "origin": model_name, 
             "originType": "LLM",
-            "details": detail_msg
         })
 
     return jsonify({

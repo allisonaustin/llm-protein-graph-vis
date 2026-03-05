@@ -99,7 +99,7 @@ function initGraph() {
             else {
               return colorScale(link.score);
             }
-        })
+          })
           .linkOpacity(1)
           .linkDirectionalParticles(link => {
               if (!showLinkParticle) return 0;              
@@ -109,9 +109,9 @@ function initGraph() {
           .linkDirectionalParticleColor(link => {
             return link.originType == "LLM" ? '#d41159' : '#ffff00'
           })
-          .linkDirectionalArrowLength(2)
-          .linkDirectionalArrowRelPos(1)
-          .linkDirectionalArrowColor(link => link.color ? pSBC ( 0.1, standardize_color(link.color), color8 ) : 'gray' )
+          // .linkDirectionalArrowLength(2)
+          // .linkDirectionalArrowRelPos(1)
+          // .linkDirectionalArrowColor(link => link.color ? pSBC ( 0.1, standardize_color(link.color), color8 ) : 'gray' )
           .linkCurvature(link => link.curvature || 0.2)
           .onNodeClick(node => {
 
@@ -597,7 +597,7 @@ function passesPruning(link, index) {
     if (settings.PruningMode === 'Neighborhood') {
         if (!hoverNode && !hoverLink) return true; 
 
-        const maxD = settings.MaxDepth;
+        const maxD = settings.Hops;
         const s = link.source;
         const t = link.target;
 
@@ -751,7 +751,7 @@ function applyNeighborhoodPruning(linkType = false) {
     if (!hoverNode && !hoverLink) return;
 
     const { links } = Graph.graphData();
-    const maxD = settings.MaxDepth;
+    const maxD = settings.Hops;
 
     const visibleLinks = links.filter(l => {
         const s = l.source;
