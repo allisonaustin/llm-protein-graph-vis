@@ -18,7 +18,7 @@
   transform: scale(1.1);
 }
 #protein-info-container {
-  width: 28rem;
+  width: 25rem;
   height: calc(100vh - 80px);
   max-height: calc(100vh - 80px);
   margin: 10px;
@@ -287,4 +287,33 @@
 }
 .protein-text-container li {
   margin-bottom: 5px;
+}
+
+#protein-tab-content {
+    border: none !important; 
+    background-color: #0a0a0a; 
+    border-radius: 0 0 4px 4px;
+    padding: 15px !important;
+}
+
+#protein-tabs {
+    border-bottom: 1px solid #222 !important; 
+}
+
+#protein-tabs .nav-link {
+    border: none !important;
+    color: #666 !important;
+    font-size: 11px;
+    background: transparent !important;
+}
+
+#protein-tabs .nav-link.active {
+    color: #D41159 !important;
+    background-color: #0a0a0a !important; 
+    border-bottom: 2px solid #D41159 !important; 
+}
+
+.protein-text-container p {
+    margin-bottom: 5px;
+    font-size: 12px;
 }

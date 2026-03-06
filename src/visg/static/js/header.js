@@ -1,5 +1,6 @@
 var go_file;
 var gaf_file;
+var data_file;
 
 document.getElementById('ppi-upload').addEventListener('change', function(event) {
     const file = event.target.files[0];
@@ -55,6 +56,7 @@ document.getElementById('preset-file-selector').addEventListener('change', funct
             return response.blob();
         })
         .then(blob => {
+            data_file = fileName;
             let formData = new FormData();
             formData.append('file', blob, fileName);
             formData.append('maxLimit', maxLimit);

@@ -4,17 +4,25 @@
   </div>
   <div class="card-header collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-chat">
     <span>LLM</span>
-    <i class="chevron-icon bi bi-chevron-down"></i>
-  </div>
-  <div id="prediction-container" style="padding: 10px; display:flex; align-items: center; justify-content: space-between; ">
-      <p id="prediction-status" style="font-style: italic; font-size: 14px; color: #ccc; margin-bottom: 8px;"></p>
-      <button id="btn-predict">
-          Generate
-      </button>
+        <i class="chevron-icon bi bi-chevron-down"></i>
     </div>
-  <div id="collapse-chat" class="collapse show">
-    <div id="chat-history" style="height: 160px; font-size: 0.9rem;"></div>
-  </div>
+
+    <div id="collapse-chat" class="collapse show">
+        <div id="protein-tabs" class="nav nav-tabs mt-3" role="tablist">
+        </div>
+
+        <div id="protein-tab-content" class="tab-content border-start border-end border-bottom p-3" style="font-size: 12px; line-height: 1.4; max-height: 500px; overflow-y: auto;">
+            </div>
+
+        <div id="prediction-container" style="padding: 10px; display:flex; align-items: center; justify-content: space-between;">
+            <p id="prediction-status" style="font-style: italic; font-size: 14px; color: #ccc; margin-bottom: 8px;"></p>
+            <button id="btn-predict">
+                Generate
+            </button>
+        </div>
+        
+        <div id="chat-history" style="display:none;"></div>
+    </div>
 
     <!-- Graph Tables -->
   <div class="card-header collapsible" data-bs-toggle="collapse" data-bs-target="#collapse-table">

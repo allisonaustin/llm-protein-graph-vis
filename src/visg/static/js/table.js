@@ -119,20 +119,24 @@ function populateLinkTable(links) {
         const score = link.score != null ? link.score : 0;
         const color = colorScale ? colorScale(score) : 'white';
 
-        const srcNode = Graph.graphData().nodes.find(n => n.id === source);
+        // const srcNode = Graph.graphData().nodes.find(n => n.id === source);
        // const clusterCell = srcNode ? `<div style="display:flex; justify-content:flex-end;"><span style="width:10px;height:10px;background-color:${srcNode.clusterColor || '#00a2ff'};border-radius:50%;opacity:0.5;"></span></div>` : '-';
 
-        const details = link.details ? link.details : `${scoreInfo[link.origin] || link.origin}`;
-
-        const species = source.split('.')[0] || '9606'; 
+        const sourceSplit = source.split('.');
+        const species = (sourceSplit.length > 1 && !isNaN(sourceSplit[0])) 
+            ? sourceSplit[0] 
+            : (data_file.split('.')[0] || '9606');
 
         const dataRef = `https://string-db.org/cgi/network?identifiers=${encodeURIComponent(source)}%0d${encodeURIComponent(target)}&species=${species}`;
         const sourceDataUrl = `<a href="${dataRef}" class="data-link" style="color: #00a2ff;" target="_blank" rel="noopener noreferrer">STRING</a> <i class="bi bi-box-arrow-up-right" style="font-size:0.8em;"></i>`;
 
+        const srcLink = `<a href="${getProteinUrl(sourceId)}" target="_blank" style="text-decoration: none; color: #3e3d3d;">${sourceId} <i class="bi bi-box-arrow-up-right" style="font-size:0.7em;"></i></a>`;
+        const tgtLink = `<a href="${getProteinUrl(targetId)}" target="_blank" style="text-decoration: none; color: #3e3d3d;">${targetId} <i class="bi bi-box-arrow-up-right" style="font-size:0.7em;"></i></a>`;
+        
         return [
             // clusterCell, 
-            sourceId,
-            link.originType == "LLM" ? `<span class="gene-link" font-weight: bold;">${targetId}</span>` : targetId,
+            srcLink,
+            link.originType == "LLM" ? `<a href="${getProteinUrl(targetId)}" target="_blank"><span class="gene-link" font-weight: bold;">${targetId}</span></a>` : tgtLink,
             `<span style="color: ${color}; font-weight: bold;">${score.toFixed(3)}</span>`,
             sourceDataUrl, // lookup
             species,

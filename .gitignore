@@ -172,6 +172,8 @@ src/visg/static/js/sijax/
 src/visg/scripts/*.ipynb
 
 *.protein.links.v12.0.txt
+*.protein.links.mapped.txt
+protein.aliases.v12.0.txt
 
 !src/visg/static/data/go_data
 go.obo

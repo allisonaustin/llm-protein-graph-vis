@@ -609,7 +609,8 @@ def predict_interactions():
         if ensp: 
             if ensp != protein_full_id:
                 id_map[ensp] = {
-                    "label": symbol,
+                    "id": symbol,
+                    "label": ensp,
                     "reasoning": item.get('details') or item.get('description', ''),
                     "details": ''
                 }
@@ -621,11 +622,11 @@ def predict_interactions():
         for gene in set(found_genes): 
             ensp = get_ensp_from_symbol(gene, species_prefix)
             if ensp and ensp != protein_full_id:
-                id_map[ensp] = {'id': ensp, 'label': gene, 'reasoning': '', 'details': ''}
+                id_map[gene] = {'id': gene, 'label': ensp, 'reasoning': '', 'details': ''}
     
     # predicted node ids
     target_ids = list(id_map.keys())
-    target_symbols = [info['label'] for info in id_map.values()]
+    target_symbols = [info['id'] for info in id_map.values()]
     
     # STRING validation
     string_scores = check_string_bulk(protein_full_id, target_ids, species_prefix)
@@ -639,10 +640,11 @@ def predict_interactions():
     pairs_to_predict = []
     if prot_a and prot_a.get('sequence'):
         for tid, info in id_map.items():
-            symbol = info['label']
-            prot_b = target_info.get(symbol)
+            gene_name = info["id"]
+            full_ensp = info["label"]
+            prot_b = target_info.get(gene_name)
             if prot_b and prot_b.get('sequence'):
-                pairs_to_predict.append((prot_a.get('geneName', 'A'), prot_a['sequence'], tid, prot_b['sequence']))
+                pairs_to_predict.append((prot_a.get('geneName', 'A'), prot_a['sequence'], gene_name, prot_b['sequence']))
     
     dscript_results = parallel_dscript_predict(pairs_to_predict)
 
@@ -650,16 +652,20 @@ def predict_interactions():
     namespaces = ['BP', 'MF', 'CC']
     resnik_tasks = []
     for tid, info in id_map.items():
-        symbol = info['label']
-        target_prot = target_info.get(symbol, {})
+        gene_name = info["id"]
+        full_ensp = info["label"]
+        target_prot = target_info.get(gene_name, {})
         for ns in ['BP', 'MF', 'CC']:
-            resnik_tasks.append(((tid, ns), prot_a.get(ns, set()), target_prot.get(ns, set())))
+            resnik_tasks.append(((gene_name, ns), prot_a.get(ns, set()), target_prot.get(ns, set())))
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         resnik_results = dict(list(executor.map(get_resnik_data, resnik_tasks)))
 
     for tid, info in id_map.items():
-        dscript_prediction = dscript_results.get(tid, {})
+        gene_name = info["id"]
+        full_ensp = info["label"]
+
+        dscript_prediction = dscript_results.get(gene_name, {})
         if dscript_prediction:
             d_prob = dscript_prediction.get('score', 0.0)
             heatmap = dscript_prediction.get('heatmap', [])
@@ -672,7 +678,7 @@ def predict_interactions():
         shared_texts = {}
 
         for ns in namespaces:
-            score, best_pair = resnik_results.get((tid, ns), (0.0, None))
+            score, best_pair = resnik_results.get((gene_name, ns), (0.0, None))
             scores[ns] = score
             
             if best_pair:
@@ -682,21 +688,21 @@ def predict_interactions():
             else:
                 shared_texts[ns] = f"No shared {ns} terms found."
 
-        string_data = string_scores.get(tid, {})
+        string_data = string_scores.get(gene_name, {})
         s_score = string_data.get('score', 0.0)
         s_type = string_data.get('type', "No STRING evidence")
         best_score = max(s_score, scores["BP"], scores["MF"], scores["CC"], d_prob)
 
         new_nodes.append({
-            "id": tid,
-            "label": info["label"],
+            "id": gene_name,
+            "label": full_ensp,
             "origin": model_name,
             "originType": "LLM",
         })
 
         new_links.append({
             "source": protein_full_id,
-            "target": tid,
+            "target": gene_name,
             "score": round(best_score, 4),
             "string": s_score,
             "resnik_bp": scores["BP"],

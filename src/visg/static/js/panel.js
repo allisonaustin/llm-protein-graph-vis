@@ -2,6 +2,70 @@ var isMinimized = false;
 var chartWidth = 130;
 var chartHeight = 130;
 
+function createProteinTab(seedProtein) {
+    const tabsContainer = document.getElementById('protein-tabs');
+    const contentContainer = document.getElementById('protein-tab-content');
+    
+    const tabId = `tab-${seedProtein.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    
+    const existingTab = document.getElementById(`${tabId}-tab`);
+    if (existingTab) {
+        existingTab.click(); 
+        return document.getElementById(`${tabId}-content`);
+    }
+
+    document.querySelectorAll('#protein-tabs .nav-link').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('#protein-tab-content .tab-pane').forEach(p => p.classList.remove('show', 'active'));
+
+    const tabBtn = document.createElement('button');
+    tabBtn.className = "nav-link active small py-1 px-2"; 
+    tabBtn.id = `${tabId}-tab`;
+    tabBtn.setAttribute('data-bs-toggle', 'tab');
+    tabBtn.setAttribute('data-bs-target', `#${tabId}`);
+    tabBtn.setAttribute('type', 'button');
+    tabBtn.role = 'tab';
+    tabBtn.style.fontSize = "0.8rem";
+    tabBtn.innerHTML = `${seedProtein} <span class="ms-2" onclick="event.stopPropagation(); closeTab('${tabId}')">×</span>`;
+
+    const tabPane = document.createElement('div');
+    tabPane.className = "tab-pane fade show active"; 
+    tabPane.id = tabId;
+    tabPane.role = 'tabpanel';
+    tabPane.innerHTML = `<div id="${tabId}-content"></div>`;
+
+    tabsContainer.appendChild(tabBtn);
+    contentContainer.appendChild(tabPane);
+
+    activateTab(tabId);
+    
+    return document.getElementById(`${tabId}-content`);
+}
+
+window.closeTab = function(tabId) {
+    const btn = document.getElementById(`${tabId}-tab`);
+    const pane = document.getElementById(tabId);
+    if (btn) btn.remove();
+    if (pane) pane.remove();
+    
+    const remaining = document.querySelectorAll('#protein-tabs .nav-link');
+    if (remaining.length > 0) {
+        remaining[remaining.length - 1].click();
+    }
+};
+
+function activateTab(tabId) {
+    document.querySelectorAll('#protein-tabs .nav-link').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('#protein-tab-content .tab-pane').forEach(pane => pane.classList.remove('show', 'active'));
+
+    const targetBtn = document.getElementById(`${tabId}-tab`);
+    const targetPane = document.getElementById(tabId);
+
+    if (targetBtn && targetPane) {
+        targetBtn.classList.add('active');
+        targetPane.classList.add('show', 'active');
+    }
+}
+
 async function getPDBIdFromGene(fullEnspId) {
   try {
     const searchUrl = `https://rest.uniprot.org/uniprotkb/search?query=${fullEnspId}&format=json&fields=gene_names,organism_name,organism_id,xref_pdb`;
@@ -220,13 +284,11 @@ function updateClusterList(nodeClusterMap) {
     .style("font-size", "12px")
 }
 
-function renderChatResponse(fullText, predictedNodes, predictedLinks) {
-  const container = document.getElementById('chat-history');
+function renderChatResponse(fullText, sourceNodeId, predictedNodes, predictedLinks, containerPanel) {
+  const container = containerPanel || document.getElementById('chat-history');
 
   predictedNodes.forEach(node => {
-    const symbol = node.label;
-    if (symbol.toUpperCase() === 'NOTE') return;
-
+    const symbol = node.id; // node.label for full ENSP ids
     const link = predictedLinks.find(l => l.target === node.id || l.source === node.id);
     if (!link) return;
 
@@ -238,7 +300,8 @@ function renderChatResponse(fullText, predictedNodes, predictedLinks) {
     relevantLines = relevantLines.replace(/^\s*(\d+\.|-)\s+/gm, '');
 
     const row = document.createElement('div');
-    row.className = "protein-row-container";
+    row.id = `row-${sourceNodeId}`;
+    row.className = `protein-row-container`;
     row.style = "display: flex; flex-direction:column; gap: 8px; margin-bottom: 10px; border-bottom: 1px solid #333;";
 
     const chartSection = document.createElement('div');
@@ -246,7 +309,8 @@ function renderChatResponse(fullText, predictedNodes, predictedLinks) {
 
     // Text (left side)
     const textPortion = document.createElement('div');
-    textPortion.className = "protein-text-container";
+    textPortion.id = `text-${sourceNodeId}`;
+    textPortion.className = 'protein-text-container';
     textPortion.style = "font-size: 14px; color: #eee;";
 
     const displayId = node.id.includes('.') ? node.id.split('.')[1] : node.id;
@@ -275,7 +339,6 @@ function renderChatResponse(fullText, predictedNodes, predictedLinks) {
     const footer = document.createElement('div');
     footer.style = "font-size: 0.75rem; color: #aaa; font-style: italic; background: rgba(255,255,255,0.03); padding: 4px 10px; border-radius: 4px; border-left: 2px solid #444;";
     footer.innerHTML = `
-                       <div style="margin-bottom: 4px;"><strong>Shared GO Terms (MICAs):</strong></div>
                         <div style="display: flex; align-items: center; margin-bottom: 2px;">
                           <i class="bi bi-diagram-3" style="margin-right: 8px; color: #00a2ff;"></i>
                           <strong>BP:</strong>&nbsp;${link.shared_BP || "None"}
@@ -298,7 +361,7 @@ function renderChatResponse(fullText, predictedNodes, predictedLinks) {
     if (link && link.contact && link.contact.length > 0) {
       renderContactMap(heatmapId, link.contact);
       heatmapPortion.onclick = () => {
-        expandHeatmap(link.contact, symbol);
+        expandHeatmap(link.contact, sourceNodeId, displayId, symbol);
       }
     } else {
       document.getElementById(heatmapId).innerHTML = 
@@ -317,10 +380,9 @@ function renderChatResponse(fullText, predictedNodes, predictedLinks) {
 }
 
 async function requestLLMPrediction(nodeId) {
-  const history = document.getElementById('chat-history');
-  const statusMsg = document.createElement('p');
-  statusMsg.innerHTML = `<b>System:</b> Querying interactions for ${nodeId}...`;
-  history.appendChild(statusMsg);
+  const displayId = nodeId.includes('.') ? nodeId.split('.')[1] : nodeId;
+  const targetPanel = createProteinTab(displayId);
+  targetPanel.innerHTML = `<b>System:</b> Querying interactions for ${displayId}...`;
 
   try {
     const res = await fetch('/api/predict', {
@@ -332,15 +394,16 @@ async function requestLLMPrediction(nodeId) {
     const data = await res.json();
     console.log('response:',data);
     
-    statusMsg.remove();
+    targetPanel.innerHTML = '';
+
     if (data.nodes && data.nodes.length > 0) {
       addGraphData({ nodes: data.nodes, links: data.links });
     }
-    renderChatResponse(data.clean_text, data.nodes, data.links);
+    renderChatResponse(data.clean_text, nodeId, data.nodes, data.links, targetPanel);
 
   } catch (err) {
     console.error(err);
-    statusMsg.innerHTML = `<b>Error:</b> Could not reach the prediction API.`;
+    targetPanel.innerHTML = `<b>Error:</b> Could not reach the prediction API.`;
   }
 }
 
@@ -448,7 +511,7 @@ function renderContactMap(containerId, data) {
   }, 10);
 }
 
-function expandHeatmap(contactData, symbol) {
+function expandHeatmap(contactData, sourceNodeId, targetNodeId, symbol) {
     const overlay = document.createElement('div');
     overlay.style = `
         position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
@@ -459,7 +522,7 @@ function expandHeatmap(contactData, symbol) {
 
     const graphDiv = document.createElement('div');
     graphDiv.id = 'expanded-heatmap-container';
-    graphDiv.style = "width: 80vw; height: 80vh; background: #000; border: 1px solid #444; border-radius: 8px;";
+    graphDiv.style = "width: 60vw; height: 60vh; background: #000; border: 1px solid #444; border-radius: 8px;";
     
     const closeBtn = document.createElement('button');
     closeBtn.innerText = "Close";
@@ -486,13 +549,13 @@ function expandHeatmap(contactData, symbol) {
     const layout = {
       autosize: true,
       xaxis: { 
-        title: 'Residue Index (Protein A)', 
+        title: `Residue Index (${sourceNodeId})`, 
         color: '#ccc', 
         gridcolor: '#333',
         scaleanchor: 'y'
       },
       yaxis: { 
-        title: `Residue Index (${symbol})`, 
+        title: `Residue Index (${targetNodeId})`, 
         visible: true,
         color: '#ccc', 
         gridcolor: '#333' 
