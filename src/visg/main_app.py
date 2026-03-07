@@ -376,9 +376,9 @@ def upload_ppi():
             # Filtering by confidence
             if score >= 500:
                 if p1 not in nodes_map: 
-                    nodes_map[p1] = {"id": p1, "origin": file.filename, "originType": "File", "clusterColor": "#00a2ff"}
+                    nodes_map[p1] = {"id": p1, "origin": file.filename, "originType": "File"}
                 if p2 not in nodes_map: 
-                    nodes_map[p2] = {"id": p2, "origin": file.filename, "originType": "File", "clusterColor": "#00a2ff"}
+                    nodes_map[p2] = {"id": p2, "origin": file.filename, "originType": "File"}
                 
                 links.append({
                     "source": p1, 
@@ -657,7 +657,6 @@ def predict_interactions():
     with ThreadPoolExecutor(max_workers=8) as executor:
         resnik_results = dict(list(executor.map(get_resnik_data, resnik_tasks)))
 
-    print(resnik_results)
     dscript_results = parallel_dscript_predict(pairs_to_predict)
 
     new_nodes = []

@@ -58,7 +58,6 @@
   align-items: center;       
   justify-content: space-between; 
   height: 30px;             
-  padding: 0 0.5rem;         
   line-height: normal; 
 }
 
@@ -304,6 +303,31 @@
 }
 
 .protein-text-container p {
-  margin-bottom: 5px;
-  font-size: 12px;
+  font-size: 11px;
+}
+
+#gridModalBody {
+    overflow-y: auto;
+}
+
+.grid-layout {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr); 
+    gap: 5px;
+    width: 100%;
+}
+
+.prediction-square {
+    background: #1e1e1e;
+    border: 1px solid #333;
+    border-radius: 4px;
+    color: white;
+    font-size: 11px;
+    break-inside: avoid;
+    page-break-inside: avoid;
+}
+
+.prediction-square .btn-group, 
+.prediction-square .ignore-export {
+    display: none !important;
 }

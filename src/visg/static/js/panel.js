@@ -1,6 +1,7 @@
 var isMinimized = false;
 var chartWidth = 130;
 var chartHeight = 130;
+var currentTab = "";
 
 function createProteinTab(seedProtein) {
     const tabsContainer = document.getElementById('protein-tabs');
@@ -34,17 +35,27 @@ function createProteinTab(seedProtein) {
     tabPane.className = "tab-pane fade show active"; 
     tabPane.id = tabId;
     tabPane.role = 'tabpanel';
-    tabPane.innerHTML = `<div id="${tabId}-content"></div>`;
+    tabPane.innerHTML = `
+      <div class="d-flex justify-content-between align-items-center p-2" style="background: rgba(255,255,255,0.03); border-bottom: 1px solid #333;">
+          <span style="font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px;">Grid View</span>
+          <button class="btn btn-outline-secondary btn-sm" 
+                  onclick="exportTabToGrid('${seedProtein}')" 
+                  title="Expand to Grid View"
+                  style="width: 26px; height: 26px; padding: 0; border-radius: 4px; display: flex; align-items: center; justify-content: center; border-color: #555;">
+              <i class="bi bi-grid-3x3-gap" style="font-size: 0.8rem; color: #00a2ff;"></i>
+          </button>
+      </div>
+      <div id="${tabId}-content" style="padding: 10px;"></div>`;
 
     tabsContainer.appendChild(tabBtn);
     contentContainer.appendChild(tabPane);
 
     activateTab(tabId);
-    
     return document.getElementById(`${tabId}-content`);
 }
 
 window.activateTab = function(tabId) {
+  currentTab = tabId;
   // console.log("Switching to tab:", tabId); 
 
   const allButtons = document.querySelectorAll('#protein-tabs .nav-link');
@@ -601,6 +612,74 @@ function expandHeatmap(contactData, sourceNodeId, targetNodeId, symbol) {
 
     Plotly.newPlot(graphDiv, data, layout, { responsive: true });    
     overlay.onclick = (e) => { if(e.target === overlay) document.body.removeChild(overlay); };
+}
+
+function exportTabToGrid(seedProtein) {
+    currentExportProtein = seedProtein;
+    const cleanId = seedProtein.replace(/[^a-zA-Z0-9]/g, '_');
+    const tabContentId = `tab-${cleanId}-content`;
+    
+    const $gridModalBody = $('#gridModalBody');
+    $gridModalBody.empty(); // Clear preview
+
+    const existingRows = $(`#${tabContentId}`).find('.protein-row-container');
+
+    if (existingRows.length === 0) {
+        alert("No results found in this tab to export.");
+        return;
+    }
+
+    existingRows.each(function(index) {
+      const $square = $('<div class="prediction-square"></div>');
+      $gridModalBody.append($square);
+
+      const $clone = $(this).clone();
+
+      const newRadarId = `grid-radar-${index}`;
+      const newHeatmapId = `grid-heatmap-${index}`;
+
+      $clone.find('[id^="radar-"]').attr('id', newRadarId);
+      $clone.find('[id^="heatmap-"]').attr('id', newHeatmapId);
+
+      $square.append($clone);
+      
+      const proteinSymbol = $(this).find('.gene-link').text();
+      const link = Graph.graphData().links.find(l => 
+          (l.target.id || l.target) === proteinSymbol || (l.source.id || l.source) === proteinSymbol
+      );
+
+      if (link) {
+          const newRadarId = $clone.find('[id^="grid-radar"]').attr('id');
+          const newHeatmapId = $clone.find('[id^="grid-heatmap"]').attr('id');
+          
+          setTimeout(() => {
+              renderRadarChart(newRadarId, link);
+              if (link.contact) renderContactMap(newHeatmapId, link.contact);
+          }, 100); 
+        }
+    });
+
+    const modalEl = document.getElementById('gridReviewModal');
+    if (modalEl) {
+        const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modalInstance.show();
+    } else {
+        console.error("Modal element #gridReviewModal not found in DOM.");
+    }
+}
+
+function processPDFExport() {
+  const element = document.getElementById('final-export-area');
+  const opt = {
+      margin: [0.3, 0.3],
+      filename: `${currentExportProtein}_predictions.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#121212' },
+      jsPDF: { unit: 'in', format: 'a3', orientation: 'landscape' },
+      pagebreak: { mode: 'css' }
+  };
+
+  html2pdf().set(opt).from(element).save();
 }
 
 function toggleInfoBody(event) {

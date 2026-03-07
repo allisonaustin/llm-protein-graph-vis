@@ -122,6 +122,9 @@ function initGraph() {
             highlightLinks.clear();
             hoverLink = null;
 
+            const table = $('#data-table').DataTable();
+            table.rows().nodes().to$().removeClass('highlight-node');
+
             if (node && hoverNode != node.id) {
               // Highlight this node and its neighbors
               highlightNodes.add(node.id);
@@ -178,6 +181,8 @@ function initGraph() {
             highlightLinks.clear();
             hoverNode = null;
             clearNodeLabels();
+            const table = $('#data-table').DataTable();
+            table.rows().nodes().to$().removeClass('highlight-node');
 
             if (link && !highlightNodes.has(link.source.id) && !highlightNodes.has(link.target.id)) {
               hoverLink = link;

@@ -114,9 +114,6 @@ function populateLinkTable(links) {
         const sourceId = source.split('.')[1]? source.split('.')[1] : source;
         const targetId = target.split('.')[1]? target.split('.')[1] : target;
 
-        const isDuplicate = existingData.some(row => row[LINK_TABLE_COLS.length - 2] === source && row[LINK_TABLE_COLS.length - 1] === target);
-        if (isDuplicate) return;
-
         const score = link.score != null ? link.score : 0;
         const color = colorScale ? colorScale(score) : 'white';
 
