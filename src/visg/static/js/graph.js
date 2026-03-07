@@ -960,16 +960,16 @@ function addGraphData(dataPart, reset = false) {
       return group;
   });
 
-    // rebuildTable(NODE_TABLE_COLS);
-    if (currTable == 'Nodes') populateNodeTable(newNodes);
-    else if (currTable == 'Links') populateLinkTable(dataPart.links);
-
     updateGUILabels(result.links);
     Graph.graphData(result);
 
+    // rebuildTable(NODE_TABLE_COLS);
+    if (currTable == 'Nodes') populateNodeTable(Graph.graphData().nodes);
+    else if (currTable == 'Links') populateLinkTable(Graph.graphData().links);
+
     // updating highlighted sets
     if (hoverNode) {
-      const updatedLinks = Graph.graphData().links.filter(l => {
+      const updatedLinks = result.links.filter(l => {
           const s = l.source.id;
           const t = l.target.id;
           return s === hoverNode || t === hoverNode;

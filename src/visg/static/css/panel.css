@@ -67,20 +67,6 @@
   font-size: 0.8rem;      
 }
 
-#chat-history {
-  resize: vertical;
-  overflow: auto;
-  padding: 12px 16px;
-  box-sizing: border-box;
-  min-height: 80px;
-  max-height: 500px;
-  font-size: 12px;
-}
-
-#chat-input {
-  height: 35px;
-}
-
 #context-menu li {
   padding: 6px 12px;
 }
@@ -264,20 +250,20 @@
 }
 
 #btn-predict:hover {
-    background-color: #1a7fb0 !important;
-    transition: background 0.2s ease;
+  background-color: #1a7fb0 !important;
+  transition: background 0.2s ease;
 }
 
 #prediction-status {
-    font-size: 0.9em;
-    min-height: 1.2em; 
+  font-size: 0.9em;
+  min-height: 1.2em; 
 }
 
 .gene-link {
-    color: #D41159;
-    text-decoration: underline;
-    cursor: pointer;
-    font-weight: bold;
+  color: #D41159;
+  text-decoration: underline;
+  cursor: pointer;
+  font-weight: bold;
 }
 
 .protein-text-container ul, .protein-text-container ol {
@@ -290,30 +276,34 @@
 }
 
 #protein-tab-content {
-    border: none !important; 
-    background-color: #0a0a0a; 
-    border-radius: 0 0 4px 4px;
-    padding: 15px !important;
+  display: none;
+  border: none !important; 
+  background-color: #0a0a0a; 
+  border-radius: 0 0 4px 4px;
+  padding: 15px !important;
+  min-height: 20px;
+  resize: vertical;
+  max-height: 400px;
 }
 
 #protein-tabs {
-    border-bottom: 1px solid #222 !important; 
+  border-bottom: 1px solid #222 !important; 
 }
 
 #protein-tabs .nav-link {
-    border: none !important;
-    color: #666 !important;
-    font-size: 11px;
-    background: transparent !important;
+  border: none !important;
+  color: #666 !important;
+  font-size: 11px;
+  background: transparent !important;
 }
 
 #protein-tabs .nav-link.active {
-    color: #D41159 !important;
-    background-color: #0a0a0a !important; 
-    border-bottom: 2px solid #D41159 !important; 
+  color: #D41159 !important;
+  background-color: #0a0a0a !important; 
+  border-bottom: 2px solid #D41159 !important; 
 }
 
 .protein-text-container p {
-    margin-bottom: 5px;
-    font-size: 12px;
+  margin-bottom: 5px;
+  font-size: 12px;
 }

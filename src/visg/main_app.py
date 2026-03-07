@@ -49,7 +49,9 @@ termcounts = {}
 ic_map = {}
 go_dag = {}
 annotations = {"BP": {}, "MF": {}, "CC": {}}
-
+data_file = ""
+go_file = ""
+gaf_file = ""
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model = {}
 
@@ -195,7 +197,7 @@ def create_user_prompt(protein_name):
 
 @app.route('/build_go_dag', methods=['POST'])
 def build_go_dag():
-    global go_dag
+    global go_dag, go_file
     try: 
         data = request.json
         go_file = data.get('go_file')
@@ -212,7 +214,7 @@ def build_go_dag():
 
 @app.route('/build_ic', methods=['POST'])
 def build_ic():
-    global annotations, ic_map, termcounts
+    global annotations, ic_map, termcounts, gaf_file
     print("Building IC lookup table...")
     try: 
         data = request.json
@@ -346,6 +348,7 @@ def upload_ppi():
         return jsonify({"error": "No file"}), 400
     
     file = request.files['file']
+    data_file = file.filename
     maxLimit = request.form.get('maxLimit', type=int, default=3000)
     nodes_map = {}
     links = []
@@ -581,18 +584,20 @@ def get_resnik_data(task):
 @app.route('/api/predict', methods=['POST'])
 def predict_interactions():
     data = request.json
-    protein_full_id = data.get('protein_id') # e.g., "9606.ENSP00000269305"
+    source_id = data.get('protein_id') # e.g., "TP53"
     model_name = data.get('model', "llama3.1")
     
     # Extract just the name/symbol for the LLM
-    display_name = protein_full_id.split('.')[-1]
-    species_prefix = protein_full_id.split('.')[0] if '.' in protein_full_id else "9606"
+    species_prefix = data_file.split('.')[0] if '.' in data_file else "9606"
+
+    ensp_a = get_ensp_from_symbol(source_id) or source_id
+    prot_a = get_protein_info(source_id, species_prefix)
 
     response = requests.post('http://localhost:11434/api/chat', json={
         "model": model_name,
         "messages": [
             {"role": "system", "content": create_system_prompt()},
-            {"role": "user", "content": create_user_prompt(display_name)}
+            {"role": "user", "content": create_user_prompt(source_id)}
         ],
         "stream": False
     })
@@ -605,65 +610,64 @@ def predict_interactions():
     for item in predictions:
         symbol = item['symbol']
         ensp = get_ensp_from_symbol(symbol, species_prefix)
-        
         if ensp: 
-            if ensp != protein_full_id:
-                id_map[ensp] = {
-                    "id": symbol,
-                    "label": ensp,
-                    "reasoning": item.get('details') or item.get('description', ''),
-                    "details": ''
-                }
+            id_map[ensp] = {
+                "symbol": symbol,
+                "ensp": ensp,
+                "reasoning": item.get('details') or item.get('description', ''),
+            }
         else:
             print(f"Skipping hallucination or invalid symbol: {symbol}")
 
     if not predictions:
-        found_genes = re.findall(r'(?:•|\*|-)\s*([A-Z][A-Z0-9]{2,10})', raw_text)
+        found_genes = re.findall(r'(?:•|\*|-)\s*([A-Z0-9\-]{2,15})', raw_text)
         for gene in set(found_genes): 
             ensp = get_ensp_from_symbol(gene, species_prefix)
-            if ensp and ensp != protein_full_id:
-                id_map[gene] = {'id': gene, 'label': ensp, 'reasoning': '', 'details': ''}
+            if ensp:
+                id_map[ensp] = {
+                    'symbol': gene, 
+                    'ensp': ensp, 
+                    'reasoning': ''
+                }
     
     # predicted node ids
-    target_ids = list(id_map.keys())
-    target_symbols = [info['id'] for info in id_map.values()]
-    
-    # STRING validation
-    string_scores = check_string_bulk(protein_full_id, target_ids, species_prefix)
-
-    new_nodes = []
-    new_links = []
-    prot_a = get_protein_info(protein_full_id, species_prefix)
+    target_ensps = list(id_map.keys())
+    target_symbols = [info['symbol'] for info in id_map.values()]
     target_info = get_batch_protein_info(tuple(target_symbols), species_prefix)
 
-    # D-SCRIPT binding prediction
-    pairs_to_predict = []
-    if prot_a and prot_a.get('sequence'):
-        for tid, info in id_map.items():
-            gene_name = info["id"]
-            full_ensp = info["label"]
-            prot_b = target_info.get(gene_name)
-            if prot_b and prot_b.get('sequence'):
-                pairs_to_predict.append((prot_a.get('geneName', 'A'), prot_a['sequence'], gene_name, prot_b['sequence']))
-    
-    dscript_results = parallel_dscript_predict(pairs_to_predict)
+    # STRING validation
+    string_scores = check_string_bulk(ensp_a, target_ensps, species_prefix)
 
-    # Resnik-BP
     namespaces = ['BP', 'MF', 'CC']
-    resnik_tasks = []
-    for tid, info in id_map.items():
-        gene_name = info["id"]
-        full_ensp = info["label"]
-        target_prot = target_info.get(gene_name, {})
-        for ns in ['BP', 'MF', 'CC']:
-            resnik_tasks.append(((gene_name, ns), prot_a.get(ns, set()), target_prot.get(ns, set())))
+    resnik_tasks = [] 
+    pairs_to_predict = [] # for dscript
+    for ensp_id, info in id_map.items():
+        gene_name = info["symbol"]
+        prot_b = target_info.get(gene_name, {})
 
+        if prot_a and prot_b:
+            # D-SCRIPT binding prediction
+            if prot_a.get('sequence') and prot_b.get('sequence'):
+                pairs_to_predict.append((prot_a.get('geneName', 'A'), prot_a['sequence'], gene_name, prot_b['sequence']))
+
+            # Resnik
+            for ns in namespaces:
+                resnik_tasks.append(((gene_name, ns), prot_a.get(ns, set()), prot_b.get(ns, set())))
+    
     with ThreadPoolExecutor(max_workers=8) as executor:
         resnik_results = dict(list(executor.map(get_resnik_data, resnik_tasks)))
 
-    for tid, info in id_map.items():
-        gene_name = info["id"]
-        full_ensp = info["label"]
+    print(resnik_results)
+    dscript_results = parallel_dscript_predict(pairs_to_predict)
+
+    new_nodes = []
+    new_links = []
+
+    for ensp_id, info in id_map.items():
+        gene_name = info["symbol"]
+
+        string_data = string_scores.get(ensp_id, {})
+        s_score = string_data.get('score', 0.0)
 
         dscript_prediction = dscript_results.get(gene_name, {})
         if dscript_prediction:
@@ -688,20 +692,17 @@ def predict_interactions():
             else:
                 shared_texts[ns] = f"No shared {ns} terms found."
 
-        string_data = string_scores.get(gene_name, {})
-        s_score = string_data.get('score', 0.0)
-        s_type = string_data.get('type', "No STRING evidence")
         best_score = max(s_score, scores["BP"], scores["MF"], scores["CC"], d_prob)
 
         new_nodes.append({
             "id": gene_name,
-            "label": full_ensp,
+            "label": ensp_id,
             "origin": model_name,
             "originType": "LLM",
         })
 
         new_links.append({
-            "source": protein_full_id,
+            "source": source_id,
             "target": gene_name,
             "score": round(best_score, 4),
             "string": s_score,

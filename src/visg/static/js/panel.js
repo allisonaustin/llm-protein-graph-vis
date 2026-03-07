@@ -5,6 +5,8 @@ var chartHeight = 130;
 function createProteinTab(seedProtein) {
     const tabsContainer = document.getElementById('protein-tabs');
     const contentContainer = document.getElementById('protein-tab-content');
+
+    contentContainer.style.display = 'block';
     
     const tabId = `tab-${seedProtein.replace(/[^a-zA-Z0-9]/g, '_')}`;
     
@@ -23,6 +25,7 @@ function createProteinTab(seedProtein) {
     tabBtn.setAttribute('data-bs-toggle', 'tab');
     tabBtn.setAttribute('data-bs-target', `#${tabId}`);
     tabBtn.setAttribute('type', 'button');
+    tabBtn.setAttribute('onclick', `activateTab('${tabId}')`);
     tabBtn.role = 'tab';
     tabBtn.style.fontSize = "0.8rem";
     tabBtn.innerHTML = `${seedProtein} <span class="ms-2" onclick="event.stopPropagation(); closeTab('${tabId}')">×</span>`;
@@ -41,6 +44,28 @@ function createProteinTab(seedProtein) {
     return document.getElementById(`${tabId}-content`);
 }
 
+window.activateTab = function(tabId) {
+  // console.log("Switching to tab:", tabId); 
+
+  const allButtons = document.querySelectorAll('#protein-tabs .nav-link');
+  allButtons.forEach(btn => btn.classList.remove('active'));
+
+  const allPanes = document.querySelectorAll('#protein-tab-content .tab-pane');
+  allPanes.forEach(pane => {
+    pane.classList.remove('active');
+    pane.classList.remove('show');
+  });
+
+  const targetBtn = document.getElementById(`${tabId}-tab`);
+  const targetPane = document.getElementById(tabId);
+
+  if (targetBtn && targetPane) {
+    targetBtn.classList.add('active');
+    targetPane.classList.add('show');
+    targetPane.classList.add('active');
+  }
+};
+
 window.closeTab = function(tabId) {
     const btn = document.getElementById(`${tabId}-tab`);
     const pane = document.getElementById(tabId);
@@ -52,19 +77,6 @@ window.closeTab = function(tabId) {
         remaining[remaining.length - 1].click();
     }
 };
-
-function activateTab(tabId) {
-    document.querySelectorAll('#protein-tabs .nav-link').forEach(btn => btn.classList.remove('active'));
-    document.querySelectorAll('#protein-tab-content .tab-pane').forEach(pane => pane.classList.remove('show', 'active'));
-
-    const targetBtn = document.getElementById(`${tabId}-tab`);
-    const targetPane = document.getElementById(tabId);
-
-    if (targetBtn && targetPane) {
-        targetBtn.classList.add('active');
-        targetPane.classList.add('show', 'active');
-    }
-}
 
 async function getPDBIdFromGene(fullEnspId) {
   try {
@@ -284,8 +296,20 @@ function updateClusterList(nodeClusterMap) {
     .style("font-size", "12px")
 }
 
+function formatGOLink(text) {
+  if (!text || text === "None" || text.includes("No shared")) return "None";
+  
+  const goMatch = text.match(/GO:\d+/);
+  if (goMatch) {
+    const goId = goMatch[0];
+    const url = `http://amigo.geneontology.org/amigo/term/${goId}`;
+    return text.replace(goId, `<a href="${url}" target="_blank" style="color: #888; text-decoration: underline; font-weight: normal;">${goId}</a>`);
+  }
+  return text;
+}
+
 function renderChatResponse(fullText, sourceNodeId, predictedNodes, predictedLinks, containerPanel) {
-  const container = containerPanel || document.getElementById('chat-history');
+  const container = containerPanel;
 
   predictedNodes.forEach(node => {
     const symbol = node.id; // node.label for full ENSP ids
@@ -314,9 +338,14 @@ function renderChatResponse(fullText, sourceNodeId, predictedNodes, predictedLin
     textPortion.style = "font-size: 14px; color: #eee;";
 
     const displayId = node.id.includes('.') ? node.id.split('.')[1] : node.id;
-    const linkHtml = `<a href="#" class="gene-link" style="font-weight:bold;" onclick="handleSymbolSelection('${node.id}'); return false;">${displayId}</a> (${symbol})`;
+    const displayLabel = node.label? ` (${node.label})` : "";
+    const linkHtml = `<a href="#" class="gene-link" style="font-weight:bold;" onclick="handleSymbolSelection('${node.id}'); return false;">${displayId}</a>${displayLabel}`;
     let parsedText = marked.parse(relevantLines).replace(new RegExp(`\\b${symbol}\\b`, 'i'), linkHtml);
-    textPortion.innerHTML = parsedText
+    if (parsedText != "") {
+      textPortion.innerHTML = parsedText
+    } else {
+      textPortion.innerHTML = linkHtml
+    }
 
     // Radar plot (middle)
     const radarId = `radar-${node.id.replace(/[^a-zA-Z0-9]/g, '-')}`;
@@ -341,15 +370,15 @@ function renderChatResponse(fullText, sourceNodeId, predictedNodes, predictedLin
     footer.innerHTML = `
                         <div style="display: flex; align-items: center; margin-bottom: 2px;">
                           <i class="bi bi-diagram-3" style="margin-right: 8px; color: #00a2ff;"></i>
-                          <strong>BP:</strong>&nbsp;${link.shared_BP || "None"}
+                          <strong>BP:</strong>&nbsp;${formatGOLink(link.shared_BP) || "None"}
                         </div>
                         <div style="display: flex; align-items: center; margin-bottom: 2px;">
                           <i class="bi bi-diagram-3" style="margin-right: 8px; color: #00ff88;"></i>
-                          <strong>MF:</strong>&nbsp;${link.shared_MF || "None"}
+                          <strong>MF:</strong>&nbsp;${formatGOLink(link.shared_MF) || "None"}
                         </div>
                         <div style="display: flex; align-items: center;">
                           <i class="bi bi-diagram-3" style="margin-right: 8px; color: #ffcc00;"></i>
-                          <strong>CC:</strong>&nbsp;${link.shared_CC || "None"}
+                          <strong>CC:</strong>&nbsp;${formatGOLink(link.shared_CC) || "None"}
                         </div>`;
 
     row.append(textPortion);
@@ -370,7 +399,7 @@ function renderChatResponse(fullText, sourceNodeId, predictedNodes, predictedLin
   });
 
   if (container.innerHTML === "") {
-    container.innerHTML = `<div class="model-response"><i>No specific explanations found for the predicted proteins.</i></div>`;
+    container.innerHTML = `<div class="model-response"><i>No specific explanations/proteins found in response. Please try again</i></div>`;
   }
   const isAtBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 50;
   if (isAtBottom) {
@@ -382,7 +411,12 @@ function renderChatResponse(fullText, sourceNodeId, predictedNodes, predictedLin
 async function requestLLMPrediction(nodeId) {
   const displayId = nodeId.includes('.') ? nodeId.split('.')[1] : nodeId;
   const targetPanel = createProteinTab(displayId);
-  targetPanel.innerHTML = `<b>System:</b> Querying interactions for ${displayId}...`;
+  
+  const statusId = `status-${Date.now()}`;
+  const statusHtml = `<div id="${statusId}" style="color: #888; margin: 10px 0; font-style: italic;">
+                        <b>System:</b> Querying new interactions for ${displayId}...
+                      </div>`;
+  targetPanel.insertAdjacentHTML('beforeend', statusHtml);
 
   try {
     const res = await fetch('/api/predict', {
@@ -394,7 +428,8 @@ async function requestLLMPrediction(nodeId) {
     const data = await res.json();
     console.log('response:',data);
     
-    targetPanel.innerHTML = '';
+    const statusEl = document.getElementById(statusId);
+    if (statusEl) statusEl.remove();
 
     if (data.nodes && data.nodes.length > 0) {
       addGraphData({ nodes: data.nodes, links: data.links });

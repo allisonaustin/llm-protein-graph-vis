@@ -52,8 +52,7 @@ function rebuildTable(columns) {
 function populateNodeTable(newNodes) {
     const dataTable = $('#data-table').DataTable();
 
-    // checking new cluster assignment of existing nodes
-    dataTable.rows().every(function(rowIdx, tableLoop, rowLoop) {
+    dataTable.rows().every(function() {
         const rowData = this.data();
         const nodeId = rowData[NODE_TABLE_COLS.length-2]; 
         const node = newNodes.concat(Graph.graphData().nodes).find(n => n.id === nodeId);
@@ -63,16 +62,14 @@ function populateNodeTable(newNodes) {
     });
 
     newNodes.forEach(node => {
-        const existing = dataTable.rows().data().toArray().some(row => row[1] === node.id);
+        const existing = dataTable.rows().data().toArray().some(row => row[NODE_TABLE_COLS.length - 2] == node.id);
         if (!existing) {
             const inD = Array.isArray(node.in_degree) ? node.in_degree.length : 0;
             const outD = Array.isArray(node.out_degree) ? node.out_degree.length : 0;
             const totalLinks = inD + outD;
-            const nodeId = node.id.split('.')[1]? node.id.split('.')[1] : node.id; // 10090.ENSMUSP00000000312 -> ENSMUSP00000000312
+            const nodeId = node.id.includes('.') ? node.id.split('.')[1] : node.id; // 10090.ENSMUSP00000000312 -> ENSMUSP00000000312
             const nodeUrl = `<a href="${getProteinUrl(node.id)}" target="_blank" style="text-decoration: none;">${nodeId} <i class="bi bi-box-arrow-up-right" style="font-size:0.7em;"></i></a>`;
-            // const clusterCell = `<div style="display:flex; justify-content:flex-end;"><span style="width:10px;height:10px;background-color:${node.clusterColor};border-radius:50%;opacity:0.5;"></span></div>`;           
             dataTable.row.add([
-              // clusterCell, 
               nodeUrl, 
               totalLinks, 
               node.id, // hidden
@@ -95,6 +92,7 @@ function populateNodeTable(newNodes) {
 
 function populateLinkTable(links) {
     const dataTable = $('#data-table').DataTable();
+    const existingData = dataTable.rows().data().toArray();
 
     $('#data-table tbody').off('click', 'tr');
 
@@ -115,6 +113,9 @@ function populateLinkTable(links) {
         const target = typeof link.target === 'object' ? link.target.id : link.target;
         const sourceId = source.split('.')[1]? source.split('.')[1] : source;
         const targetId = target.split('.')[1]? target.split('.')[1] : target;
+
+        const isDuplicate = existingData.some(row => row[LINK_TABLE_COLS.length - 2] === source && row[LINK_TABLE_COLS.length - 1] === target);
+        if (isDuplicate) return;
 
         const score = link.score != null ? link.score : 0;
         const color = colorScale ? colorScale(score) : 'white';

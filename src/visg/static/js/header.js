@@ -88,7 +88,11 @@ function triggerBuildGoDag(fileName) {
     .then(data => {
         go_file = data["filename"];
         console.log('GO DAG Built:', go_file);
-    });
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        document.getElementById('stats').innerHTML = `<span style="color:red;">Error: ${error.message}</span>`;
+    })
 }
 
 function triggerBuildIC(fileName) {
@@ -105,6 +109,10 @@ function triggerBuildIC(fileName) {
         gaf_file = data["filename"];
         console.log('IC Map Built:', gaf_file);
         updatePredictionUI(hoverNode);
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        document.getElementById('stats').innerHTML = `<span style="color:red;">Error: ${error.message}</span>`;
     });
 }
 
