@@ -322,7 +322,7 @@ def list_presets():
 
 @app.route('/api/list-gos')
 def list_gos():
-    directory = os.path.join(current_app.static_folder, 'data/go_data')
+    directory = os.path.join(current_app.static_folder, 'data/go-data')
     if not os.path.exists(directory):
         return jsonify([])
     files = [f for f in os.listdir(directory) if f.endswith(('.obo'))]
@@ -330,7 +330,7 @@ def list_gos():
 
 @app.route('/api/list-gafs')
 def list_gafs():
-    directory = os.path.join(current_app.static_folder, 'data/go_data')
+    directory = os.path.join(current_app.static_folder, 'data/go-data')
     if not os.path.exists(directory):
         return jsonify([])
     

@@ -175,7 +175,7 @@ src/visg/scripts/*.ipynb
 *.protein.links.mapped.txt
 protein.aliases.v12.0.txt
 
-!src/visg/static/data/go_data
+!src/visg/static/data/go-data
 go.obo
 go-basic.obo
 mgi.gaf

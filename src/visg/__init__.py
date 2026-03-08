@@ -40,6 +40,6 @@ UDF_RESULT = {
     "tscore": 0.0
 }
 
-go_data_dir = "./visg/scripts/go-data/"
+go_data_dir = "./visg/static/data/go-data/"
 
 import visg.main_app

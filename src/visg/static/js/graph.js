@@ -56,14 +56,6 @@ function initGraph() {
             // const outD = new Set(node.out_degree || []).size;
             // label += ` (IN → ${inD}, OUT → ${outD})`;
 
-            if (showNeighbors) {
-              if (!node.neighbors || node.neighbors.length === 0) {
-                label += `<br/>Neighbors → []`;
-              } else {
-                label += `<br/>Neighbors → ${getChunks(node.neighbors)}`;
-              }
-            }
-
             if (showNodeInfo) {
               label += `
                 <br/>Biological process: ${node.process || 'N/A'}
@@ -237,6 +229,12 @@ function initGraph() {
 function showNodeLabel(node) {
     Graph.graphData().nodes.forEach(n => n.showLabel = false);
     node.showLabel = true;
+    if (showNeighbors && node.neighbors) {
+        node.neighbors.forEach(neighborId => {
+            const neighborNode = Graph.graphData().nodes.find(n => n.id === neighborId);
+            if (neighborNode) neighborNode.showLabel = true;
+        });
+    }
     Graph.refresh(); 
 }
 
@@ -261,6 +259,9 @@ const zoomToFit = () => {
 // show node neighbors or not on node hover
 const showNodeNeighbors = () => {
     showNeighbors = !showNeighbors;
+    if (!showNeighbors) {
+        clearNodeLabels();
+    }
     Graph
         .nodeLabel(Graph.nodeLabel());
 }
