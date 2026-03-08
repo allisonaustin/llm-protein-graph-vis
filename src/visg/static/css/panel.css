@@ -303,31 +303,29 @@
 }
 
 .protein-text-container p {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 #gridModalBody {
-    overflow-y: auto;
+  overflow-y: auto;
 }
 
 .grid-layout {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr); 
-    gap: 5px;
-    width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr); 
+  gap: 5px;
+  width: 100%;
 }
 
 .prediction-square {
-    background: #1e1e1e;
-    border: 1px solid #333;
-    border-radius: 4px;
-    color: white;
-    font-size: 11px;
-    break-inside: avoid;
-    page-break-inside: avoid;
+  background: #1e1e1e;
+  color: white;
+  font-size: 11px !important;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .prediction-square .btn-group, 
 .prediction-square .ignore-export {
-    display: none !important;
+  display: none !important;
 }

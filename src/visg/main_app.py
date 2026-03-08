@@ -1,7 +1,5 @@
 from visg import app
-from flask import render_template
-from flask import Flask, g
-from flask import request, jsonify, current_app
+from flask import Flask, g, Response, render_template, request, jsonify, current_app
 import flask_sijax
 from visg import data_path, \
                 master_file, \
@@ -18,19 +16,14 @@ from visg.scripts.graph_processor import Protein_Graph
 
 import re
 import os
-from os import listdir
-from os.path import isfile, join
 import json
 import pygraphviz
 from pygraphviz import AGraph
 import networkx as nx
 from networkx.readwrite import json_graph
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
-import time
-import io
 import itertools
 import requests
+import gzip
 
 from functools import lru_cache 
 import torch 
@@ -172,7 +165,7 @@ def create_system_prompt():
     """
     return "You are a helpful assistant specialized in molecular biology and protein interactions. When asked about protein interactions, provide clear, concise lists of interacting proteins with brief explanations. Focus on generating accurate protein names that are commonly used in databases and literature."
 
-def create_user_prompt(protein_name):
+def create_user_prompt(protein_name, existing_neighbors=None):
     """
     Create the user prompt for a specific protein.
     
@@ -182,9 +175,11 @@ def create_user_prompt(protein_name):
     Returns:
         str: The formatted user prompt
     """
+    neighbors_str = "The current network already includes these known interactors: " + ", ".join(existing_neighbors) if existing_neighbors else ""
     base_prompt = (
         "List proteins that might interact with {protein}. "
-        "Please provide a simple list of protein names (gene symbols/names) "
+        "{neighbors}"
+        "Please provide a simple list of protein names (HGNC Gene Symbols) "
         "that could potentially interact with {protein}, along with a brief "
         "reason for each interaction. Be specific and accurate in your reasoning."
         "Focus on well-known, documented interactions. "
@@ -193,7 +188,7 @@ def create_user_prompt(protein_name):
         "Do not repeat {protein} as the interacting protein."
         "Format your response as: INTERACTING_PROTEIN_NAME - brief description of interaction type."
     )
-    return base_prompt.format(protein=protein_name)
+    return base_prompt.format(protein=protein_name, neighbors=neighbors_str)
 
 @app.route('/build_go_dag', methods=['POST'])
 def build_go_dag():
@@ -379,7 +374,7 @@ def upload_ppi():
                     nodes_map[p1] = {"id": p1, "origin": file.filename, "originType": "File"}
                 if p2 not in nodes_map: 
                     nodes_map[p2] = {"id": p2, "origin": file.filename, "originType": "File"}
-                
+            
                 links.append({
                     "source": p1, 
                     "target": p2, 
@@ -480,7 +475,7 @@ def parse_llm_output(raw_text):
     """
     results = []
     lines = raw_text.strip().split('\n')
-    pattern = r"(?m)^(?:[\d+\.\-\*\s]*)(?:\*\*)?([A-Za-z0-9_-]+)(?:\*\*)?\s*[-:]\s*(.*)$"
+    pattern = r"(?m)^[\s•\-\d\.]*\*?\*?([A-Z0-9\-_]{2,15})\*?\*?\s*[-:]\s*(.*)"
 
     for line in lines:
         line = line.strip()
@@ -489,20 +484,13 @@ def parse_llm_output(raw_text):
             
         match = re.search(pattern, line)
         if match:
-            symbol = match.group(1).strip()
+            symbol = match.group(1).replace("-","").strip()
             description = match.group(2).strip()
             
             if 2 <= len(symbol) <= 20:
                 results.append({
                     "symbol": symbol.upper(), 
                     "description": description
-                })
-        else:
-            words = line.split()
-            if words and len(words[0]) > 2 and words[0].isupper():
-                results.append({
-                    "symbol": words[0].replace(':', '').strip(),
-                    "description": " ".join(words[1:]) if len(words) > 1 else "No description provided."
                 })
     return results
 
@@ -585,6 +573,7 @@ def get_resnik_data(task):
 def predict_interactions():
     data = request.json
     source_id = data.get('protein_id') # e.g., "TP53"
+    neighbors = data.get('neighbors', "")
     model_name = data.get('model', "llama3.1")
     
     # Extract just the name/symbol for the LLM
@@ -597,7 +586,7 @@ def predict_interactions():
         "model": model_name,
         "messages": [
             {"role": "system", "content": create_system_prompt()},
-            {"role": "user", "content": create_user_prompt(source_id)}
+            {"role": "user", "content": create_user_prompt(source_id, neighbors)}
         ],
         "stream": False
     })
@@ -610,7 +599,7 @@ def predict_interactions():
     for item in predictions:
         symbol = item['symbol']
         ensp = get_ensp_from_symbol(symbol, species_prefix)
-        if ensp: 
+        if ensp and source_id != symbol: 
             id_map[ensp] = {
                 "symbol": symbol,
                 "ensp": ensp,

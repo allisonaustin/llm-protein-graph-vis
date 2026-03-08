@@ -235,7 +235,7 @@ $('#tab-nodes').on('click', () => {
     currTable = 'Nodes';
     rebuildTable(NODE_TABLE_COLS);
     populateNodeTable(Graph.graphData().nodes);
-    applyHighlights();
+    // applyHighlights();
 });
 
 $('#tab-links').on('click', () => {
@@ -244,7 +244,7 @@ $('#tab-links').on('click', () => {
     currTable = 'Links';
     rebuildTable(LINK_TABLE_COLS);
     populateLinkTable(Graph.graphData().links);
-    applyHighlights();
+    // applyHighlights();
 });
 
 document.getElementById("popout-table").addEventListener("click", () => {

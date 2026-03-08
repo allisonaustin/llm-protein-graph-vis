@@ -1,5 +1,6 @@
 from flask import Flask
 from flask_cors import CORS
+from flask_compress import Compress
 import os
 import flask_sijax
 
@@ -14,6 +15,7 @@ app.config['CORS_HEADERS'] = 'Content-Type'
 app.config['SIJAX_STATIC_PATH'] = path
 app.config['SIJAX_JSON_URI'] = '/static/js/sijax/json2.js'
 flask_sijax.Sijax(app)
+Compress(app)
 
 data_path = "./visg/static/data/graph_master_scored" # "./visg/static/data/" 
 master_filename = "interactions_full_run_static.dot"#"small_data.dot" #interactions_full_run.dot

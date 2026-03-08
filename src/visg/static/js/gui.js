@@ -9,7 +9,8 @@ const Settings = function() {
     this.ShowNodeNeighbors = false;
     this.ShowNodeInfo = false;
     this.Hops = 2;
-    this.MaxLinks = 3000;
+    this.Score = 500;
+    this.MaxLinks = 20000;
     this.showAlLinks = true;
     this.NodeDistance = collisonStrengthVal;
     this.Layout = currLayout;
@@ -51,6 +52,24 @@ const pruningController = folder4.add(settings, 'PruningMode', ['Global', 'Neigh
 const depthController = folder4.add(settings, 'Hops', 0, 20)
     .step(1)
     .name('Hops')
+const scoreController = folder4.add(settings, 'Score', 0, 1000) // min 0, max 1000
+    .step(1)
+    .name('MinScore')
+    .onChange(value => {
+        linkElements.style("display", d => {
+            const linkScore = d.score || 0; 
+            return linkScore >= value ? "inline" : "none";
+        });
+        const visibleLinks = data.links.filter(l => (l.score || 0) >= value);
+        const visibleNodeIds = new Set();
+        visibleLinks.forEach(l => {
+            visibleNodeIds.add(l.source.id || l.source);
+            visibleNodeIds.add(l.target.id || l.target);
+        });
+        nodeElements.style("display", d => {
+            return visibleNodeIds.has(d.id) ? "inline" : "none";
+        });
+    });
 const linksController = folder4.add(settings, 'MaxLinks', 0, maxLimit).step(1)
     .onChange(applyLinkFilters);
 folder4.open();

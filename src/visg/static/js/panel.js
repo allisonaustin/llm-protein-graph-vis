@@ -323,19 +323,28 @@ function renderChatResponse(fullText, sourceNodeId, predictedNodes, predictedLin
   const container = containerPanel;
 
   predictedNodes.forEach(node => {
-    const symbol = node.id; // node.label for full ENSP ids
+    const targetId = node.id;
+    const uniqueSuffix = `${sourceNodeId}-${targetId}`.replace(/[^a-zA-Z0-9]/g, '-');
+    const rowId = `row-${uniqueSuffix}`;
+
+    if (document.getElementById(rowId)) {
+        console.log(`Skipping duplicate: ${targetId} already rendered for ${sourceNodeId}`);
+        return; 
+    }
+
     const link = predictedLinks.find(l => l.target === node.id || l.source === node.id);
     if (!link) return;
 
     // Try to find a reasoning in the raw text
     let relevantLines = fullText.split('\n').filter(line => {
-        return new RegExp(`\\b${symbol}\\b`, 'i').test(line);
+        return new RegExp(`\\b${targetId}\\b`, 'i').test(line);
     }).join('\n');
+
     // Remove leading "1. ", or "- "
     relevantLines = relevantLines.replace(/^\s*(\d+\.|-)\s+/gm, '');
 
     const row = document.createElement('div');
-    row.id = `row-${sourceNodeId}`;
+    row.id = `row-${uniqueSuffix}`;
     row.className = `protein-row-container`;
     row.style = "display: flex; flex-direction:column; gap: 8px; margin-bottom: 10px; border-bottom: 1px solid #333;";
 
@@ -344,14 +353,14 @@ function renderChatResponse(fullText, sourceNodeId, predictedNodes, predictedLin
 
     // Text (left side)
     const textPortion = document.createElement('div');
-    textPortion.id = `text-${sourceNodeId}`;
+    textPortion.id = `text-${uniqueSuffix}`;
     textPortion.className = 'protein-text-container';
     textPortion.style = "font-size: 14px; color: #eee;";
 
     const displayId = node.id.includes('.') ? node.id.split('.')[1] : node.id;
     const displayLabel = node.label? ` (${node.label})` : "";
     const linkHtml = `<a href="#" class="gene-link" style="font-weight:bold;" onclick="handleSymbolSelection('${node.id}'); return false;">${displayId}</a>${displayLabel}`;
-    let parsedText = marked.parse(relevantLines).replace(new RegExp(`\\b${symbol}\\b`, 'i'), linkHtml);
+    let parsedText = marked.parse(relevantLines).replace(new RegExp(`\\b${targetId}\\b`, 'i'), linkHtml);
     if (parsedText != "") {
       textPortion.innerHTML = parsedText
     } else {
@@ -359,13 +368,13 @@ function renderChatResponse(fullText, sourceNodeId, predictedNodes, predictedLin
     }
 
     // Radar plot (middle)
-    const radarId = `radar-${node.id.replace(/[^a-zA-Z0-9]/g, '-')}`;
+    const radarId = `radar-${uniqueSuffix}`;
     const radarPortion = document.createElement('div');
     radarPortion.innerHTML = `<div id="${radarId}" style="width: ${chartWidth + 80}px; height: ${chartHeight + 80}px;"></div>`;
 
     // Contact heatmap (right)
     const heatmapPortion = document.createElement('div');
-    const heatmapId = `heatmap-${node.id.replace(/[^a-zA-Z0-9]/g, '-')}`;
+    const heatmapId = `heatmap-${uniqueSuffix}`;
     heatmapPortion.innerHTML = `
       <div style="text-align:center;">
         <div id="${heatmapId}" style="width: ${chartWidth}px; height: ${chartHeight}px; background: #111; border-radius: 4px; border: 1px solid #444;"></div>
@@ -401,7 +410,7 @@ function renderChatResponse(fullText, sourceNodeId, predictedNodes, predictedLin
     if (link && link.contact && link.contact.length > 0) {
       renderContactMap(heatmapId, link.contact);
       heatmapPortion.onclick = () => {
-        expandHeatmap(link.contact, sourceNodeId, displayId, symbol);
+        expandHeatmap(link.contact, sourceNodeId, displayId);
       }
     } else {
       document.getElementById(heatmapId).innerHTML = 
@@ -429,11 +438,13 @@ async function requestLLMPrediction(nodeId) {
                       </div>`;
   targetPanel.insertAdjacentHTML('beforeend', statusHtml);
 
+  const neighbors = [...highlightNodes].filter(node => node !== nodeId);
+
   try {
     const res = await fetch('/api/predict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ protein_id: nodeId })
+      body: JSON.stringify({ protein_id: nodeId, neighbors: neighbors })
     });
 
     const data = await res.json();
@@ -557,7 +568,7 @@ function renderContactMap(containerId, data) {
   }, 10);
 }
 
-function expandHeatmap(contactData, sourceNodeId, targetNodeId, symbol) {
+function expandHeatmap(contactData, sourceNodeId, targetNodeId) {
     const overlay = document.createElement('div');
     overlay.style = `
         position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
@@ -635,28 +646,29 @@ function exportTabToGrid(seedProtein) {
 
       const $clone = $(this).clone();
 
-      const newRadarId = `grid-radar-${index}`;
-      const newHeatmapId = `grid-heatmap-${index}`;
+      const targetSymbol = $(this).find('.gene-link').text().trim();
+      const uniqueSuffix = `${seedProtein}-${targetSymbol}`.replace(/[^a-zA-Z0-9]/g, '-');
+    
+      const newRadarId = `grid-radar-${uniqueSuffix}-${index}`;
+      const newHeatmapId = `grid-heatmap-${uniqueSuffix}-${index}`;
 
       $clone.find('[id^="radar-"]').attr('id', newRadarId);
       $clone.find('[id^="heatmap-"]').attr('id', newHeatmapId);
 
       $square.append($clone);
-      
-      const proteinSymbol = $(this).find('.gene-link').text();
-      const link = Graph.graphData().links.find(l => 
-          (l.target.id || l.target) === proteinSymbol || (l.source.id || l.source) === proteinSymbol
-      );
 
+      const link = Graph.graphData().links.find(l => {
+        const s = typeof l.source === 'object' ? l.source.id : l.source;
+        const t = typeof l.target === 'object' ? l.target.id : l.target;
+        return (s === seedProtein && t === targetSymbol);
+      });
+      
       if (link) {
-          const newRadarId = $clone.find('[id^="grid-radar"]').attr('id');
-          const newHeatmapId = $clone.find('[id^="grid-heatmap"]').attr('id');
-          
-          setTimeout(() => {
-              renderRadarChart(newRadarId, link);
-              if (link.contact) renderContactMap(newHeatmapId, link.contact);
-          }, 100); 
-        }
+        setTimeout(() => {
+          renderRadarChart(newRadarId, link);
+          if (link.contact) renderContactMap(newHeatmapId, link.contact);
+        }, 200);
+      }
     });
 
     const modalEl = document.getElementById('gridReviewModal');
@@ -680,6 +692,10 @@ function processPDFExport() {
   };
 
   html2pdf().set(opt).from(element).save();
+}
+
+function processCSVExport() {
+  return;
 }
 
 function toggleInfoBody(event) {
