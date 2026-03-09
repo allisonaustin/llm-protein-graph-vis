@@ -64,6 +64,9 @@ The network data files (.txt, .csv) should be stored in
     http://127.0.0.1:5001/index
     ```
 
+## Instructions to start LLM
+To enable LLM graph updates, you need to set up an [Ollama](https://ollama.com/) endpoint for the application. Go to [this link](https://docs.ollama.com/quickstart) for a quick set up. Our experiments used Llama 3.1 (8B) model. Make sure your model is running on the default port: ```http://localhost:11434/api/chat```. 
+
 ## Instructions to start the D-SCRIPT server
 
 1. Open terminal, change directory to `./src/visg`
