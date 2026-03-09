@@ -434,7 +434,7 @@ async function requestLLMPrediction(nodeId) {
   
   const statusId = `status-${Date.now()}`;
   const statusHtml = `<div id="${statusId}" style="color: #888; margin: 10px 0; font-style: italic;">
-                        <b>System:</b> Querying new interactions for ${displayId}...
+                        Querying new interactions for ${displayId}...
                       </div>`;
   targetPanel.insertAdjacentHTML('beforeend', statusHtml);
 

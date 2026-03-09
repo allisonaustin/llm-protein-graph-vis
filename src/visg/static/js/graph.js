@@ -25,7 +25,7 @@ let enablePointerInteractions = true;
 let pauseAnimation = true;
 let showLinkParticle = false;
 let showHighlights = true;
-let showNeighbors = false;
+let showNeighbors = true;
 let showNodeInfo = false;
 
 const timerV = 12000;

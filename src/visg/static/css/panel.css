@@ -27,7 +27,7 @@
   flex-direction: column;
   background: #212529;
   border-radius: 8px;
-  overflow-y: auto; 
+  /* overflow-y: auto;  */
   transition: max-height 0.3s ease; 
 }
 
