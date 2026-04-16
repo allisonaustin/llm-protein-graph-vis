@@ -8,8 +8,7 @@ from visg import data_path, \
                 new_data_master_filename, \
                 watchFlag, \
                 min_link_count, \
-                max_link_count, \
-                go_data_dir
+                max_link_count
 
 # from visg.scripts.listener import Listener
 from visg.scripts.graph_processor import Protein_Graph
@@ -37,6 +36,7 @@ from goatools.obo_parser import GODag
 from goatools.associations import read_gaf
 from goatools.anno.gaf_reader import GafReader
 from goatools.semantic import TermCounts, get_info_content, resnik_sim
+import time
 
 termcounts = {}
 ic_map = {}
@@ -193,6 +193,9 @@ def create_user_prompt(protein_name, existing_neighbors=None):
 @app.route('/build_go_dag', methods=['POST'])
 def build_go_dag():
     global go_dag, go_file
+    print("Building GO DAG...")
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    go_data_dir = os.path.join(BASE_DIR, 'static', 'data', 'go-data')
     try: 
         data = request.json
         go_file = data.get('go_file')
@@ -211,6 +214,8 @@ def build_go_dag():
 def build_ic():
     global annotations, ic_map, termcounts, gaf_file
     print("Building IC lookup table...")
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    go_data_dir = os.path.join(BASE_DIR, 'static', 'data', 'go-data')
     try: 
         data = request.json
         gaf_file = os.path.join(go_data_dir, data.get('gaf_file'))
@@ -506,7 +511,7 @@ def get_dscript_prediction(gene_a, seq_a, gene_b, seq_b):
         print("Could not find sequences for one or both proteins.")
         return
     
-    print(f"Predicting: {gene_a} ({len(seq_a)}aa) x {gene_b} ({len(seq_b)}aa)")
+    print(f"Predicting: {gene_a} ({len(seq_a)}aa) x {gene_b} ({len(seq_b)}aa)\n")
     
     dscript_url = "http://localhost:5050/predict_pair"
     payload = {
@@ -533,6 +538,19 @@ def parallel_dscript_predict(protein_pairs):
 
     with ThreadPoolExecutor(max_workers=4) as executor:
         results = list(executor.map(single_job, protein_pairs))
+    
+    return dict(results)
+
+def serial_dscript_predict(protein_pairs):
+    """
+    protein_pairs: list of tuples (gene_a, seq_a, gene_b, seq_b)
+    Runs predictions sequentially on a single thread.
+    """
+    results = []
+    for pair in protein_pairs:
+        gene_a, seq_a, gene_b, seq_b = pair
+        res = get_dscript_prediction(gene_a, seq_a, gene_b, seq_b)
+        results.append((gene_b, res))
     
     return dict(results)
 
@@ -571,27 +589,41 @@ def get_resnik_data(task):
 
 @app.route('/api/predict', methods=['POST'])
 def predict_interactions():
+    stats = {}
+    start_total = time.time()
+
     data = request.json
     source_id = data.get('protein_id') # e.g., "TP53"
     neighbors = data.get('neighbors', "")
     model_name = data.get('model', "llama3.1")
-    
-    # Extract just the name/symbol for the LLM
-    species_prefix = data_file.split('.')[0] if '.' in data_file else "9606"
 
+    # TEST MDOE
+    test = data.get('test', False)
+    test_mode = data.get('test_mode', '')
+    test_size = int(data.get('test_size', 0))
+
+    species_prefix = data_file.split('.')[0] if '.' in data_file else "9606"  # Extract just the name/symbol for the LLM
+    
     ensp_a = get_ensp_from_symbol(source_id) or source_id
     prot_a = get_protein_info(source_id, species_prefix)
 
+    t0 = time.time() # stage 1: generation
+    user_content = create_user_prompt(source_id, neighbors)
+
+    if test and test_size > 0:
+        user_content += f"\nIMPORTANT: Provide exactly {test_size} interaction candidates."
+    
     response = requests.post('http://localhost:11434/api/chat', json={
         "model": model_name,
         "messages": [
             {"role": "system", "content": create_system_prompt()},
-            {"role": "user", "content": create_user_prompt(source_id, neighbors)}
+            {"role": "user", "content": user_content}
         ],
         "stream": False
     })
     
     raw_text = response.json().get('message', {}).get('content', '')
+    t1 = time.time() # stage 2: parsing
     predictions = parse_llm_output(raw_text)
     clean_text = clean_llm_response(raw_text)
     id_map = {} 
@@ -618,14 +650,37 @@ def predict_interactions():
                     'ensp': ensp, 
                     'reasoning': ''
                 }
-    
+
+    # TEST MODE
+    if test and test_size > 0:
+        if (len(id_map) == 0): # using test prediction if LLM parsing fails
+            symbol = 'TP53'
+            ensp = get_ensp_from_symbol(symbol, species_prefix)
+            if ensp and source_id != symbol: 
+                id_map[ensp] = {
+                    "symbol": symbol,
+                    "ensp": ensp,
+                    "reasoning": item.get('details') or item.get('description', ''),
+                }
+        
+        current_items = list(id_map.items())
+        current_count = len(current_items)
+
+        if current_count > 0:
+            if current_count > test_size:
+                id_map = dict(current_items[:test_size])
+            elif current_count < test_size:
+                last_key, last_val = current_items[-1]
+                for i in range(test_size - current_count):
+                    fake_key = f"{last_key}_pad_{i}"
+                    id_map[fake_key] = last_val
+        
+        print(f"TEST MODE: Scaled id_map to exactly {len(id_map)} nodes for benchmarking.")
+
     # predicted node ids
     target_ensps = list(id_map.keys())
     target_symbols = [info['symbol'] for info in id_map.values()]
     target_info = get_batch_protein_info(tuple(target_symbols), species_prefix)
-
-    # STRING validation
-    string_scores = check_string_bulk(ensp_a, target_ensps, species_prefix)
 
     namespaces = ['BP', 'MF', 'CC']
     resnik_tasks = [] 
@@ -643,11 +698,54 @@ def predict_interactions():
             for ns in namespaces:
                 resnik_tasks.append(((gene_name, ns), prot_a.get(ns, set()), prot_b.get(ns, set())))
     
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        resnik_results = dict(list(executor.map(get_resnik_data, resnik_tasks)))
+    # ANALYSIS 
+    t2 = time.time() 
+    def run_string():
+        start_s = time.time()
+        res = check_string_bulk(ensp_a, target_ensps, species_prefix)
+        return res, time.time() - start_s
 
-    dscript_results = parallel_dscript_predict(pairs_to_predict)
+    def run_resnik():
+        start_r = time.time()
+        if test_mode == 'baseline':
+            res = {task[0]: get_resnik_data(task)[1] for task in resnik_tasks}
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            res = dict(list(executor.map(get_resnik_data, resnik_tasks)))
+        return res, time.time() - start_r
 
+    def run_dscript():
+        start_d = time.time()
+        if test_mode == 'baseline':
+            res = serial_dscript_predict(pairs_to_predict)
+        else:
+            res = parallel_dscript_predict(pairs_to_predict)
+        return res, time.time() - start_d
+
+    if test_mode == 'baseline':
+        # Sequential execution for baseline comparison
+        start_s = time.time()
+        string_scores, _ = run_string()
+        t_str = time.time() - start_s
+        start_r = time.time()
+        resnik_results, _ = run_resnik()
+        t_rsnk = time.time() - start_r
+        start_d = time.time()
+        dscript_results, _ = run_dscript()
+        t_dscpt = time.time() - start_d
+    else:
+        # Pipeline Mode: Concurrent Execution
+        with ThreadPoolExecutor(max_workers=3) as top_executor:
+            f_str = top_executor.submit(run_string)
+            f_rsnk = top_executor.submit(run_resnik)
+            f_dscr = top_executor.submit(run_dscript)
+
+            string_scores, t_str = f_str.result()
+            resnik_results, t_rsnk = f_rsnk.result()
+            dscript_results, t_dscpt = f_dscr.result()
+
+    t3 = time.time()
+
+    # Preparing data
     new_nodes = []
     new_links = []
 
@@ -689,6 +787,15 @@ def predict_interactions():
             "originType": "LLM",
         })
 
+        stats['Generation'] = t1 - t0
+        stats['Parsing'] = t2 - t1
+        stats['Analysis'] = t3 - t2
+        stats['Analysis_STRING'] = t_str
+        stats['Analysis_Resnik'] = t_rsnk 
+        stats['Analysis_DSCRIPT'] = t_dscpt
+        stats['N_Nodes'] = len(new_nodes)
+        stats['Total_Time'] = time.time() - start_total
+
         new_links.append({
             "source": source_id,
             "target": gene_name,
@@ -709,7 +816,8 @@ def predict_interactions():
     return jsonify({
         "nodes": new_nodes,
         "links": new_links,
-        "clean_text": clean_text
+        "clean_text": clean_text,
+        "stats": stats
     })
 
 @app.route('/')
